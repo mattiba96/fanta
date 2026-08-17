@@ -82,46 +82,46 @@ function extractSectionEntries(
   return entries;
 }
 
-function parseTeamLineup($: CheerioAPI, teamDiv: Cheerio<import("domhandler").Element>): {
+function parsePlayerItems(
+  $: CheerioAPI,
+  list: Cheerio<import("domhandler").Element>,
+  status: LineupStatus,
+): ParsedLineupPlayer[] {
+  const out: ParsedLineupPlayer[] = [];
+  list.find("li.player-item").each((_, li) => {
+    const $li = $(li);
+    const link = $li.find("a.player-name").first();
+    const rawName = link.find("span").first().text().trim();
+    if (!rawName) return;
+    out.push({
+      rawName,
+      externalId: extractPlayerId(link.attr("href")),
+      status,
+      probability: parsePercent($li.find(".progress-value").first().text()),
+      note: null,
+      ballotGroup: null,
+    });
+  });
+  return out;
+}
+
+/**
+ * Ogni squadra è rappresentata due volte nella pagina: una vista "campo"
+ * (senza percentuali per i titolari) e una vista "lista" (`.card.team-card`,
+ * con percentuale di titolarità su titolari E panchina, oltre a data-status).
+ * Usiamo quest'ultima perché più ricca e affidabile.
+ */
+function parseTeamCard($: CheerioAPI, card: Cheerio<import("domhandler").Element>): {
+  teamName: string;
   formation: string | null;
   starters: ParsedLineupPlayer[];
   bench: ParsedLineupPlayer[];
 } {
-  const formation = teamDiv.attr("data-team-formation") ?? null;
-
-  const starters: ParsedLineupPlayer[] = [];
-  teamDiv.find("ul.team-lineup li.player").each((_, li) => {
-    const $li = $(li);
-    const link = $li.find("a.player-name").first();
-    const rawName = link.find("span").first().text().trim();
-    if (!rawName) return;
-    starters.push({
-      rawName,
-      externalId: extractPlayerId(link.attr("href")),
-      status: "starter",
-      probability: parsePercent($li.find(".progress-value").first().text()),
-      note: null,
-      ballotGroup: null,
-    });
-  });
-
-  const bench: ParsedLineupPlayer[] = [];
-  teamDiv.find("ul.player-list.reserves li.player-item").each((_, li) => {
-    const $li = $(li);
-    const link = $li.find("a.player-name").first();
-    const rawName = link.find("span").first().text().trim();
-    if (!rawName) return;
-    bench.push({
-      rawName,
-      externalId: extractPlayerId(link.attr("href")),
-      status: "bench",
-      probability: parsePercent($li.find(".progress-value").first().text()),
-      note: null,
-      ballotGroup: null,
-    });
-  });
-
-  return { formation, starters, bench };
+  const teamName = card.find("h3.team-name").first().text().trim();
+  const formation = card.find(".team-formation").first().text().trim() || null;
+  const starters = parsePlayerItems($, card.find("ul.player-list.starters").first(), "starter");
+  const bench = parsePlayerItems($, card.find("ul.player-list.reserves").first(), "bench");
+  return { teamName, formation, starters, bench };
 }
 
 /**
@@ -153,10 +153,11 @@ export function parseHtml(html: string): ParsedMatch[] {
     const venueRaw = $match.find(".match-location .stadium").first().text().trim();
     const venue = venueRaw && venueRaw !== "-" ? venueRaw : null;
 
-    const homeDiv = $match.find("div.team.team-home").first();
-    const awayDiv = $match.find("div.team.team-away").first();
-    const homeParsed = parseTeamLineup($, homeDiv);
-    const awayParsed = parseTeamLineup($, awayDiv);
+    const cards = $match.find(".card.team-card");
+    const cardByTeam = (teamName: string) =>
+      cards.filter((_, c) => $(c).find("h3.team-name").first().text().trim() === teamName).first();
+    const homeParsed = parseTeamCard($, cardByTeam(homeTeamName));
+    const awayParsed = parseTeamCard($, cardByTeam(awayTeamName));
 
     // Sezioni extra: ogni sezione ha 2 div.content (home, away), in quest'ordine.
     const extraSections: { selector: string; status: LineupStatus; ballotPrefix?: string }[] = [
