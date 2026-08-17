@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { getAllPlayersFull } from "@/lib/queries/players";
 import { getParticipantSummaries } from "@/lib/queries/participants";
+import { getWatchlistMap } from "@/lib/queries/watchlist";
 import { BrowsePlayers } from "@/components/players/BrowsePlayers";
 
 export const dynamic = "force-dynamic";
 
 export default async function SfogliaPage() {
-  const [players, participants] = await Promise.all([
+  const [players, participants, watchlistMap] = await Promise.all([
     getAllPlayersFull(),
     getParticipantSummaries(),
+    getWatchlistMap(),
   ]);
 
   return (
@@ -27,7 +29,7 @@ export default async function SfogliaPage() {
         </nav>
       </header>
 
-      <BrowsePlayers players={players} participants={participants} />
+      <BrowsePlayers players={players} participants={participants} watchlistMap={watchlistMap} />
     </div>
   );
 }

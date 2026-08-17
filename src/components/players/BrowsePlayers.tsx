@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { PlayerRow } from "@/lib/queries/players";
 import type { ParticipantSummary } from "@/lib/queries/participants";
+import type { WatchlistMapEntry } from "@/lib/queries/watchlist";
 import { assignPlayer } from "@/actions/auction";
 import { RoleBadge } from "@/components/players/PlayersTable";
 
@@ -26,9 +27,11 @@ const SORTS: { value: SortKey; label: string }[] = [
 export function BrowsePlayers({
   players,
   participants,
+  watchlistMap,
 }: {
   players: PlayerRow[];
   participants: ParticipantSummary[];
+  watchlistMap?: Map<number, WatchlistMapEntry>;
 }) {
   const router = useRouter();
   const [role, setRole] = useState<(typeof ROLES)[number]["value"]>("C");
@@ -160,6 +163,13 @@ export function BrowsePlayers({
                 MV {current.mv?.toFixed(2) ?? "—"} · FM {current.fm?.toFixed(2) ?? "—"} · Gol{" "}
                 {current.goals ?? "—"} · Ass. {current.assists ?? "—"}
               </p>
+              {watchlistMap?.has(current.id) && (
+                <p className="mt-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                  ★ Obiettivo
+                  {watchlistMap.get(current.id)?.targetPrice != null &&
+                    ` — max ${watchlistMap.get(current.id)?.targetPrice}`}
+                </p>
+              )}
             </div>
 
             <button

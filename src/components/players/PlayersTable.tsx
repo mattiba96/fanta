@@ -18,9 +18,11 @@ const ROLES: { value: string; label: string }[] = [
 export function PlayersTable({
   players,
   participants,
+  watchlistedIds,
 }: {
   players: PlayerRow[];
   participants: ParticipantOption[];
+  watchlistedIds?: Set<number>;
 }) {
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("");
@@ -134,6 +136,11 @@ export function PlayersTable({
                   <RoleBadge role={p.roleClassic} />
                 </td>
                 <td className="px-3 py-2 font-medium">
+                  {watchlistedIds?.has(p.id) && (
+                    <span className="mr-1 text-amber-500" title="Nei tuoi obiettivi">
+                      ★
+                    </span>
+                  )}
                   <Link href={`/giocatori/${p.slug}`} className="hover:underline">
                     {p.name}
                   </Link>

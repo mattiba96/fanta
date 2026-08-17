@@ -6,9 +6,11 @@ import { getTeamSetPieces } from "@/lib/queries/setPieces";
 import { getPlayerLineupStatus } from "@/lib/queries/lineups";
 import { getAdviceForPlayer } from "@/lib/queries/advice";
 import { getNewsForPlayer } from "@/lib/queries/news";
+import { getWatchlistEntryForPlayer } from "@/lib/queries/watchlist";
 import { bandLabel } from "@/lib/advice/engine";
 import { RoleBadge } from "@/components/players/PlayersTable";
 import { QuickAssignControl } from "@/components/auction/QuickAssignControl";
+import { WatchlistControl } from "@/components/players/WatchlistControl";
 
 export const dynamic = "force-dynamic";
 
@@ -49,11 +51,12 @@ export default async function PlayerDetailPage({
   if (!data) notFound();
 
   const { player, team, stats, statsHistory, pick } = data;
-  const [setPieces, lineupStatus, advice, news] = await Promise.all([
+  const [setPieces, lineupStatus, advice, news, watchlistEntry] = await Promise.all([
     getTeamSetPieces(team.id),
     getPlayerLineupStatus(player.id),
     pick ? Promise.resolve(null) : getAdviceForPlayer(player.id),
     getNewsForPlayer(player.name),
+    getWatchlistEntryForPlayer(player.id),
   ]);
 
   return (
@@ -70,7 +73,7 @@ export default async function PlayerDetailPage({
         <span className="text-zinc-500">{team.name}</span>
       </header>
 
-      <div className="mb-6">
+      <div className="mb-6 flex flex-wrap items-start gap-2">
         <QuickAssignControl
           playerId={player.id}
           roleClassic={player.roleClassic}
@@ -80,6 +83,7 @@ export default async function PlayerDetailPage({
           pricePaid={pick?.price ?? null}
           participants={participants}
         />
+        {!pick && <WatchlistControl playerId={player.id} initial={watchlistEntry} />}
       </div>
 
       {lineupStatus.length > 0 && (

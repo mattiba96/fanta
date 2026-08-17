@@ -1,14 +1,16 @@
 import Link from "next/link";
 import { getAllPlayersFull } from "@/lib/queries/players";
 import { getParticipantSummaries } from "@/lib/queries/participants";
+import { getWatchlistedPlayerIds } from "@/lib/queries/watchlist";
 import { PlayersTable } from "@/components/players/PlayersTable";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [players, participants] = await Promise.all([
+  const [players, participants, watchlistedIds] = await Promise.all([
     getAllPlayersFull(),
     getParticipantSummaries(),
+    getWatchlistedPlayerIds(),
   ]);
 
   return (
@@ -30,6 +32,9 @@ export default async function Home() {
           <Link href="/notizie" className="hover:underline">
             Notizie
           </Link>
+          <Link href="/obiettivi" className="hover:underline">
+            Obiettivi
+          </Link>
           <Link href="/asta" className="hover:underline">
             La mia asta
           </Link>
@@ -48,7 +53,7 @@ export default async function Home() {
           e aggiorna listone e statistiche.
         </p>
       ) : (
-        <PlayersTable players={players} participants={participants} />
+        <PlayersTable players={players} participants={participants} watchlistedIds={watchlistedIds} />
       )}
     </div>
   );
