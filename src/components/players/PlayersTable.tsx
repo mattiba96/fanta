@@ -30,6 +30,13 @@ export function PlayersTable({
   const [onlyAvailable, setOnlyAvailable] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("quotCurrentClassic");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [compareSlugs, setCompareSlugs] = useState<string[]>([]);
+
+  const toggleCompare = (slug: string) => {
+    setCompareSlugs((prev) =>
+      prev.includes(slug) ? prev.filter((s) => s !== slug) : prev.length < 4 ? [...prev, slug] : prev,
+    );
+  };
 
   const teamOptions = useMemo(() => {
     const set = new Map<string, string>();
@@ -110,10 +117,33 @@ export function PlayersTable({
         <span className="ml-auto text-sm text-zinc-500">{filtered.length} giocatori</span>
       </div>
 
+      {compareSlugs.length > 0 && (
+        <div className="mb-4 flex items-center gap-3 rounded-md border border-zinc-300 bg-zinc-50 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-900">
+          <span className="text-zinc-600 dark:text-zinc-300">
+            {compareSlugs.length} selezionat{compareSlugs.length === 1 ? "o" : "i"} per il confronto
+          </span>
+          {compareSlugs.length >= 2 && (
+            <Link
+              href={`/confronto?${compareSlugs.map((s) => `p=${s}`).join("&")}`}
+              className="rounded-md bg-zinc-900 px-3 py-1 font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+            >
+              Confronta →
+            </Link>
+          )}
+          <button
+            onClick={() => setCompareSlugs([])}
+            className="ml-auto text-xs text-zinc-400 underline hover:text-zinc-600"
+          >
+            svuota
+          </button>
+        </div>
+      )}
+
       <div className="overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
         <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-zinc-50 text-left text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
             <tr>
+              <th className="px-3 py-2 font-medium"></th>
               <th className="px-3 py-2 font-medium">Ruolo</th>
               <th className="px-3 py-2 font-medium">Nome</th>
               <th className="px-3 py-2 font-medium">Squadra</th>
@@ -132,6 +162,15 @@ export function PlayersTable({
                 key={p.id}
                 className="border-t border-zinc-100 hover:bg-zinc-50 dark:border-zinc-800 dark:hover:bg-zinc-900"
               >
+                <td className="px-3 py-2">
+                  <input
+                    type="checkbox"
+                    checked={compareSlugs.includes(p.slug)}
+                    onChange={() => toggleCompare(p.slug)}
+                    disabled={!compareSlugs.includes(p.slug) && compareSlugs.length >= 4}
+                    title="Aggiungi al confronto"
+                  />
+                </td>
                 <td className="px-3 py-2">
                   <RoleBadge role={p.roleClassic} />
                 </td>
@@ -167,7 +206,7 @@ export function PlayersTable({
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={10} className="px-3 py-6 text-center text-zinc-400">
+                <td colSpan={11} className="px-3 py-6 text-center text-zinc-400">
                   Nessun giocatore trovato. Prova ad aggiornare i dati dalla pagina Impostazioni.
                 </td>
               </tr>
