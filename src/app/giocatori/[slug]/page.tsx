@@ -4,6 +4,8 @@ import { getPlayerBySlug } from "@/lib/queries/players";
 import { getParticipantSummaries } from "@/lib/queries/participants";
 import { getTeamSetPieces } from "@/lib/queries/setPieces";
 import { getPlayerLineupStatus } from "@/lib/queries/lineups";
+import { getAdviceForPlayer } from "@/lib/queries/advice";
+import { bandLabel } from "@/lib/advice/engine";
 import { RoleBadge } from "@/components/players/PlayersTable";
 import { QuickAssignControl } from "@/components/auction/QuickAssignControl";
 
@@ -46,9 +48,10 @@ export default async function PlayerDetailPage({
   if (!data) notFound();
 
   const { player, team, stats, pick } = data;
-  const [setPieces, lineupStatus] = await Promise.all([
+  const [setPieces, lineupStatus, advice] = await Promise.all([
     getTeamSetPieces(team.id),
     getPlayerLineupStatus(player.id),
+    pick ? Promise.resolve(null) : getAdviceForPlayer(player.id),
   ]);
 
   return (
@@ -89,6 +92,46 @@ export default async function PlayerDetailPage({
               {ls.note && ` — ${ls.note}`}
             </span>
           ))}
+        </div>
+      )}
+
+      {advice && (
+        <div className="mb-6 rounded-md border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+          <div className="mb-3 flex items-center gap-4">
+            <div>
+              <p className="text-xs text-zinc-500">Indice</p>
+              <p className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+                {advice.score}
+                <span className="text-sm font-normal text-zinc-400">/100</span>
+              </p>
+            </div>
+            <div>
+              <p className="text-xs text-zinc-500">Fascia</p>
+              <p className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
+                {bandLabel(advice.band)}
+              </p>
+            </div>
+            {advice.suggestedPrice != null && (
+              <div>
+                <p className="text-xs text-zinc-500">Prezzo consigliato</p>
+                <p className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
+                  {advice.suggestedPrice}
+                </p>
+              </div>
+            )}
+          </div>
+          {advice.tags.length > 0 && (
+            <div className="flex flex-wrap gap-2">
+              {advice.tags.map((tag, i) => (
+                <span
+                  key={i}
+                  className="rounded-full bg-zinc-100 px-2 py-1 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                >
+                  {tag}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
       )}
 

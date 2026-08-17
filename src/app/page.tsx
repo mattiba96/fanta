@@ -18,6 +18,9 @@ export default async function Home() {
           FantAsta
         </h1>
         <nav className="flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
+          <Link href="/consigli" className="hover:underline">
+            Consigli
+          </Link>
           <Link href="/sfoglia" className="hover:underline">
             Sfoglia
           </Link>
