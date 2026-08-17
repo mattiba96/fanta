@@ -1,0 +1,283 @@
+import * as cheerio from "cheerio";
+import { eq } from "drizzle-orm";
+import { fetchHtml, readCachedHtml } from "../http";
+import { resolveTeamByName, matchPlayer, nowIso } from "../normalize";
+import { startRun, finishRunOk, finishRunError, runWriteTransaction } from "../pipeline";
+import { fcpRatings, unmatchedNames } from "@/db/schema";
+import { db } from "@/db/client";
+
+const BASE = "https://www.fantacalciopedia.com/lista-calciatori-serie-a";
+const ROLE_PATHS = ["portieri", "difensori", "centrocampisti", "attaccanti"];
+const MIN_EXPECTED_ROWS = 300; // guard-rail: le 4 pagine insieme coprono ~500-600 giocatori
+const COMMENT_MAX_AGE_DAYS = 30; // il commento cambia raramente, non serve ri-fetchare ad ogni visita
+
+export type ParsedRating = {
+  rawName: string;
+  teamName: string;
+  fcpUrl: string;
+  algScore: number | null;
+  trend: number | null;
+  tags: string[];
+};
+
+async function fetchRolePage(rolePath: string, opts: { force?: boolean }) {
+  return fetchHtml(`${BASE}/${rolePath}/`, {
+    cacheKey: `fcp-list-${rolePath}`,
+    force: opts.force,
+    maxAgeMinutes: 1440,
+  });
+}
+
+/** Funzione pura: HTML di una pagina-elenco -> righe tipizzate. */
+export function parseListHtml(html: string): ParsedRating[] {
+  const $ = cheerio.load(html);
+  const rows: ParsedRating[] = [];
+
+  $(".col_full.giocatore").each((_, el) => {
+    const $card = $(el);
+    const nameEl = $card.find("h3.tit_calc").first();
+    const rawName = nameEl.text().trim();
+    if (!rawName) return;
+
+    const fcpUrl = nameEl.closest("a").attr("href") ?? "";
+    const teamName = $card.find("p").first().find("small").first().text().trim();
+    const algScoreText = $card.find(".punt_calc").first().text().trim();
+    const algScore = algScoreText ? parseInt(algScoreText, 10) : null;
+
+    let trend: number | null = null;
+    $card.find(".stats_calc").each((_, s) => {
+      const t = $(s).text();
+      if (t.includes("%")) {
+        const m = t.match(/(-?\d+(?:[.,]\d+)?)/);
+        if (m) trend = Number(m[1].replace(",", "."));
+      }
+    });
+
+    const tags: string[] = [];
+    $card.find(".tag_calc img").each((_, img) => {
+      const title = $(img).attr("title")?.trim();
+      if (title) tags.push(title);
+    });
+
+    if (!teamName || !fcpUrl) return;
+    rows.push({ rawName, teamName, fcpUrl, algScore, trend, tags });
+  });
+
+  return rows;
+}
+
+export type FcpRatingsRunResult = {
+  ok: boolean;
+  rowsSeen: number;
+  rowsInserted: number;
+  rowsUnmatched: number;
+};
+
+/**
+ * Fonte "di riferimento": un nome non riconosciuto va loggato, mai creato un
+ * nuovo giocatore. Copre solo indice/tag dalle 4 pagine-elenco (poche
+ * richieste): il commento testuale e i punteggi extra vivono nella pagina
+ * individuale di ogni giocatore e vengono presi al volo solo quando la sua
+ * scheda viene aperta (vedi getOrFetchComment), non qui.
+ */
+export async function run(opts: { force?: boolean } = {}): Promise<FcpRatingsRunResult> {
+  const runId = await startRun("fcp_ratings", BASE);
+
+  try {
+    const allRows: ParsedRating[] = [];
+    for (const rolePath of ROLE_PATHS) {
+      const { html } = await fetchRolePage(rolePath, opts);
+      allRows.push(...parseListHtml(html));
+    }
+
+    if (allRows.length < MIN_EXPECTED_ROWS) {
+      await finishRunError(
+        runId,
+        `Solo ${allRows.length} righe trovate (attese >= ${MIN_EXPECTED_ROWS}): probabile cambio di struttura del sito, dati non toccati.`,
+      );
+      return { ok: false, rowsSeen: allRows.length, rowsInserted: 0, rowsUnmatched: 0 };
+    }
+
+    type ResolvedAction =
+      | { kind: "write"; playerId: number; created: boolean; row: ParsedRating }
+      | { kind: "unmatched"; row: ParsedRating; teamId: number }
+      | { kind: "skip_no_team" };
+
+    const actions: ResolvedAction[] = [];
+    for (const row of allRows) {
+      const team = await resolveTeamByName(row.teamName);
+      if (!team) {
+        actions.push({ kind: "skip_no_team" });
+        continue;
+      }
+      const match = await matchPlayer({ rawName: row.rawName, teamId: team.id });
+      if (match.playerId) {
+        actions.push({ kind: "write", playerId: match.playerId, created: false, row });
+      } else {
+        actions.push({ kind: "unmatched", row, teamId: team.id });
+      }
+    }
+
+    const now = nowIso();
+    const counters = runWriteTransaction((tx) => {
+      let inserted = 0;
+      let unmatched = 0;
+
+      tx.delete(unmatchedNames).where(eq(unmatchedNames.source, "fcp_ratings")).run();
+
+      for (const action of actions) {
+        if (action.kind === "skip_no_team") continue;
+
+        if (action.kind === "unmatched") {
+          unmatched++;
+          tx
+            .insert(unmatchedNames)
+            .values({
+              source: "fcp_ratings",
+              rawName: action.row.rawName,
+              teamId: action.teamId,
+              seenCount: 1,
+              lastSeenAt: now,
+            })
+            .onConflictDoUpdate({
+              target: [unmatchedNames.source, unmatchedNames.rawName, unmatchedNames.teamId],
+              set: { lastSeenAt: now },
+            })
+            .run();
+          continue;
+        }
+
+        tx
+          .insert(fcpRatings)
+          .values({
+            playerId: action.playerId,
+            rawName: action.row.rawName,
+            fcpUrl: action.row.fcpUrl,
+            algScore: action.row.algScore,
+            trend: action.row.trend,
+            tags: action.row.tags.join(";"),
+            updatedAt: now,
+          })
+          .onConflictDoUpdate({
+            target: fcpRatings.playerId,
+            set: {
+              rawName: action.row.rawName,
+              fcpUrl: action.row.fcpUrl,
+              algScore: action.row.algScore,
+              trend: action.row.trend,
+              tags: action.row.tags.join(";"),
+              updatedAt: now,
+            },
+          })
+          .run();
+        inserted++;
+      }
+
+      return { rowsInserted: inserted, rowsUpdated: 0, rowsUnmatched: unmatched };
+    });
+
+    await finishRunOk(
+      runId,
+      counters,
+      `${allRows.length} righe lette, ${counters.rowsInserted} abbinate, ${counters.rowsUnmatched} non riconosciute.`,
+    );
+
+    return {
+      ok: true,
+      rowsSeen: allRows.length,
+      rowsInserted: counters.rowsInserted,
+      rowsUnmatched: counters.rowsUnmatched,
+    };
+  } catch (err) {
+    await finishRunError(runId, err instanceof Error ? err.message : String(err));
+    throw err;
+  }
+}
+
+export type PlayerComment = {
+  appealScore: number | null;
+  injuryResistance: number | null;
+  investmentSolidity: number | null;
+  comment: string | null;
+};
+
+function parseIndividualPage(html: string): Omit<PlayerComment, never> {
+  const $ = cheerio.load(html);
+
+  let appealScore: number | null = null;
+  let injuryResistance: number | null = null;
+  let investmentSolidity: number | null = null;
+
+  $("ul.skills li[data-percent]").each((_, li) => {
+    const $li = $(li);
+    const label = $li.find("span").first().text().trim().toLowerCase();
+    const pct = Number($li.attr("data-percent"));
+    if (!Number.isFinite(pct)) return;
+    if (label.includes("punteggio fantacalciopedia")) appealScore = pct;
+    else if (label.includes("resistenza infortuni")) injuryResistance = pct;
+    else if (label.includes("solidità fantainvestimento") || label.includes("solidita fantainvestimento"))
+      investmentSolidity = pct;
+  });
+
+  // Il box #descr elenca i commenti in ordine dal più recente: prendiamo il primo <p>.
+  const firstParagraph = $("#descr").next(".mc_hookEvolution").find("p").first().text().trim();
+  const comment = firstParagraph || null;
+
+  return { appealScore, injuryResistance, investmentSolidity, comment };
+}
+
+/**
+ * Fetch pigro: chiamata dalla scheda giocatore, non da un job in blocco.
+ * Se il commento è già in cache (e non troppo vecchio) lo restituisce subito
+ * senza rete; altrimenti scarica la pagina individuale del giocatore su
+ * fantacalciopedia.com (unica volta ogni ~30 giorni per giocatore) e salva.
+ * Non lancia mai: un fallimento di rete ritorna i dati che c'erano (o null),
+ * la scheda giocatore non deve rompersi per questo.
+ */
+export async function getOrFetchComment(playerId: number): Promise<PlayerComment | null> {
+  const [existing] = await db.select().from(fcpRatings).where(eq(fcpRatings.playerId, playerId)).limit(1);
+  if (!existing?.fcpUrl) return null;
+
+  if (existing.commentUpdatedAt) {
+    const ageDays = (Date.now() - new Date(existing.commentUpdatedAt).getTime()) / 86_400_000;
+    if (ageDays < COMMENT_MAX_AGE_DAYS) {
+      return {
+        appealScore: existing.appealScore,
+        injuryResistance: existing.injuryResistance,
+        investmentSolidity: existing.investmentSolidity,
+        comment: existing.comment,
+      };
+    }
+  }
+
+  try {
+    const cacheKey = `fcp-player-${playerId}`;
+    const { html } = await fetchHtml(existing.fcpUrl, { cacheKey, maxAgeMinutes: COMMENT_MAX_AGE_DAYS * 1440 });
+    const parsed = parseIndividualPage(html);
+
+    await db
+      .update(fcpRatings)
+      .set({ ...parsed, commentUpdatedAt: nowIso() })
+      .where(eq(fcpRatings.playerId, playerId));
+
+    return parsed;
+  } catch {
+    // Rete assente/pagina cambiata: non rompere la scheda, usa la cache locale se esiste.
+    const cached = readCachedHtml(`fcp-player-${playerId}`);
+    if (cached) {
+      try {
+        return parseIndividualPage(cached);
+      } catch {
+        return null;
+      }
+    }
+    return existing.comment
+      ? {
+          appealScore: existing.appealScore,
+          injuryResistance: existing.injuryResistance,
+          investmentSolidity: existing.investmentSolidity,
+          comment: existing.comment,
+        }
+      : null;
+  }
+}

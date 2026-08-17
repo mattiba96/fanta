@@ -6,6 +6,7 @@ import * as listone from "@/lib/scraping/sources/listone";
 import * as setPieces from "@/lib/scraping/sources/setPieces";
 import * as probabiliFormazioni from "@/lib/scraping/sources/probabiliFormazioni";
 import * as news from "@/lib/scraping/sources/news";
+import * as fcpRatings from "@/lib/scraping/sources/fcpRatings";
 import { DEFAULT_STATS_SEASON } from "@/lib/queries/players";
 
 export type RefreshOutcome = {
@@ -71,6 +72,22 @@ export async function refreshNews(): Promise<RefreshOutcome> {
       message: result.ok
         ? `Notizie: ${result.inserted} nuove, ${result.updated} aggiornate.`
         : `Aggiornamento interrotto: solo ${result.articlesSeen} articoli trovati.`,
+    };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function refreshFcpRatings(): Promise<RefreshOutcome> {
+  try {
+    const result = await fcpRatings.run();
+    revalidatePath("/");
+    revalidatePath("/giocatori/[slug]", "page");
+    return {
+      ok: result.ok,
+      message: result.ok
+        ? `Indice appetibilità: ${result.rowsInserted} abbinati, ${result.rowsUnmatched} non riconosciuti.`
+        : `Aggiornamento interrotto: solo ${result.rowsSeen} righe trovate.`,
     };
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : String(err) };

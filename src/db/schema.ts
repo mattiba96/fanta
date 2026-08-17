@@ -193,6 +193,26 @@ export const watchlist = sqliteTable("watchlist", {
   note: text("note"),
 });
 
+export const fcpRatings = sqliteTable(
+  "fcp_ratings",
+  {
+    playerId: integer("player_id")
+      .primaryKey()
+      .references(() => players.id, { onDelete: "cascade" }),
+    rawName: text("raw_name").notNull(),
+    fcpUrl: text("fcp_url"), // pagina individuale, per il commento (fetch pigro)
+    algScore: integer("alg_score"), // "ALG FCP", 0-100 — indice di appetibilità dalla lista
+    trend: real("trend"), // percentuale, es. 30.1
+    tags: text("tags"), // CSV: Titolare;Rigorista;Fuoriclasse;...
+    appealScore: integer("appeal_score"), // "Punteggio FantaCalcioPedia" (0-100), dalla pagina individuale
+    injuryResistance: integer("injury_resistance"), // 0-100, dalla pagina individuale
+    investmentSolidity: integer("investment_solidity"), // 0-100, dalla pagina individuale
+    comment: text("comment"), // ultimo box "Consigli asta {mese anno}"
+    commentUpdatedAt: text("comment_updated_at"), // null finché non richiesta la pagina individuale
+    updatedAt: text("updated_at").notNull(),
+  },
+);
+
 export const setPieceRoles = sqliteTable(
   "set_piece_roles",
   {

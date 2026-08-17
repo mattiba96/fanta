@@ -6,10 +6,11 @@ import * as listone from "./sources/listone";
 import * as setPieces from "./sources/setPieces";
 import * as probabiliFormazioni from "./sources/probabiliFormazioni";
 import * as news from "./sources/news";
+import * as fcpRatings from "./sources/fcpRatings";
 import { DEFAULT_STATS_SEASON } from "@/lib/queries/players";
 
 // Soglie di "freschezza" per fonte: le notizie cambiano di continuo, le
-// formazioni/infortuni ogni giorno, quotazioni/statistiche molto più
+// formazioni/infortuni ogni giorno, quotazioni/statistiche/indice molto più
 // lentamente.
 const THRESHOLDS_MINUTES: Record<string, number> = {
   news: 60, // 1 ora
@@ -17,6 +18,7 @@ const THRESHOLDS_MINUTES: Record<string, number> = {
   set_piece_roles: 1440, // 24 ore
   listone: 1440,
   statistiche: 1440,
+  fcp_ratings: 1440 * 7, // 7 giorni: l'indice/tag cambiano raramente
 };
 
 const RUNNERS: Record<string, () => Promise<unknown>> = {
@@ -25,6 +27,7 @@ const RUNNERS: Record<string, () => Promise<unknown>> = {
   set_piece_roles: () => setPieces.run(),
   listone: () => listone.run(),
   statistiche: () => statistiche.run(DEFAULT_STATS_SEASON),
+  fcp_ratings: () => fcpRatings.run(),
 };
 
 // Evita di far partire due refresh della stessa fonte in parallelo se più

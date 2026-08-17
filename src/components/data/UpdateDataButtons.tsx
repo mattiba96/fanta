@@ -7,6 +7,7 @@ import {
   refreshSetPieces,
   refreshProbabiliFormazioni,
   refreshNews,
+  refreshFcpRatings,
   type RefreshOutcome,
 } from "@/actions/data";
 
@@ -34,6 +35,7 @@ export function UpdateDataButtons() {
   const [setPiecesState, runSetPieces] = useRefreshButton(refreshSetPieces);
   const [probabiliState, runProbabili] = useRefreshButton(refreshProbabiliFormazioni);
   const [newsState, runNews] = useRefreshButton(refreshNews);
+  const [fcpState, runFcp] = useRefreshButton(refreshFcpRatings);
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:flex-wrap">
@@ -58,6 +60,7 @@ export function UpdateDataButtons() {
         onClick={runProbabili}
       />
       <RefreshButton label="Aggiorna notizie" state={newsState} onClick={runNews} />
+      <RefreshButton label="Aggiorna indice appetibilità" state={fcpState} onClick={runFcp} />
     </div>
   );
 }
