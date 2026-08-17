@@ -2,6 +2,7 @@ import * as statistiche from "@/lib/scraping/sources/statistiche";
 import * as listone from "@/lib/scraping/sources/listone";
 import * as setPieces from "@/lib/scraping/sources/setPieces";
 import * as probabiliFormazioni from "@/lib/scraping/sources/probabiliFormazioni";
+import * as news from "@/lib/scraping/sources/news";
 
 const DEFAULT_STATS_SEASON = "2025-26";
 
@@ -36,9 +37,15 @@ async function main() {
       console.log(JSON.stringify(result, null, 2));
       break;
     }
+    case "news": {
+      console.log("Scraping notizie...");
+      const result = await news.run({ force });
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
     default:
       console.error(
-        `Comando sconosciuto: "${command}".\nUso: npm run scrape -- <statistiche|listone|rigoristi|probabili> [--season=2025-26] [--force]`,
+        `Comando sconosciuto: "${command}".\nUso: npm run scrape -- <statistiche|listone|rigoristi|probabili|news> [--season=2025-26] [--force]`,
       );
       process.exit(1);
   }

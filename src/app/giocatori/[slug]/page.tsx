@@ -5,6 +5,7 @@ import { getParticipantSummaries } from "@/lib/queries/participants";
 import { getTeamSetPieces } from "@/lib/queries/setPieces";
 import { getPlayerLineupStatus } from "@/lib/queries/lineups";
 import { getAdviceForPlayer } from "@/lib/queries/advice";
+import { getNewsForPlayer } from "@/lib/queries/news";
 import { bandLabel } from "@/lib/advice/engine";
 import { RoleBadge } from "@/components/players/PlayersTable";
 import { QuickAssignControl } from "@/components/auction/QuickAssignControl";
@@ -48,10 +49,11 @@ export default async function PlayerDetailPage({
   if (!data) notFound();
 
   const { player, team, stats, pick } = data;
-  const [setPieces, lineupStatus, advice] = await Promise.all([
+  const [setPieces, lineupStatus, advice, news] = await Promise.all([
     getTeamSetPieces(team.id),
     getPlayerLineupStatus(player.id),
     pick ? Promise.resolve(null) : getAdviceForPlayer(player.id),
+    getNewsForPlayer(player.name),
   ]);
 
   return (
@@ -197,6 +199,26 @@ export default async function PlayerDetailPage({
                 </div>
               );
             })}
+          </div>
+        </>
+      )}
+
+      {news.length > 0 && (
+        <>
+          <h2 className="mt-8 mb-2 text-sm font-medium text-zinc-500">Notizie recenti</h2>
+          <div className="space-y-2">
+            {news.map((n) => (
+              <a
+                key={n.id}
+                href={n.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block rounded-md border border-zinc-200 bg-white p-3 text-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
+              >
+                <p className="font-medium text-zinc-900 dark:text-zinc-50">{n.title}</p>
+                {n.excerpt && <p className="mt-0.5 text-xs text-zinc-500">{n.excerpt}</p>}
+              </a>
+            ))}
           </div>
         </>
       )}

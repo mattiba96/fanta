@@ -5,11 +5,14 @@ import * as statistiche from "./sources/statistiche";
 import * as listone from "./sources/listone";
 import * as setPieces from "./sources/setPieces";
 import * as probabiliFormazioni from "./sources/probabiliFormazioni";
+import * as news from "./sources/news";
 import { DEFAULT_STATS_SEASON } from "@/lib/queries/players";
 
-// Soglie di "freschezza" per fonte: le formazioni/infortuni cambiano ogni
-// giorno, quotazioni/statistiche molto più lentamente.
+// Soglie di "freschezza" per fonte: le notizie cambiano di continuo, le
+// formazioni/infortuni ogni giorno, quotazioni/statistiche molto più
+// lentamente.
 const THRESHOLDS_MINUTES: Record<string, number> = {
+  news: 60, // 1 ora
   probabili: 180, // 3 ore
   set_piece_roles: 1440, // 24 ore
   listone: 1440,
@@ -17,6 +20,7 @@ const THRESHOLDS_MINUTES: Record<string, number> = {
 };
 
 const RUNNERS: Record<string, () => Promise<unknown>> = {
+  news: () => news.run(),
   probabili: () => probabiliFormazioni.run(),
   set_piece_roles: () => setPieces.run(),
   listone: () => listone.run(),

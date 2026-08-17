@@ -232,6 +232,22 @@ export const unmatchedNames = sqliteTable(
   (t) => [uniqueIndex("ux_unmatched").on(t.source, t.rawName, t.teamId)],
 );
 
+export const newsArticles = sqliteTable(
+  "news_articles",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    source: text("source").notNull(), // sosfanta
+    url: text("url").notNull(),
+    title: text("title").notNull(),
+    excerpt: text("excerpt"),
+    author: text("author"),
+    imageUrl: text("image_url"),
+    publishedAt: text("published_at"),
+    fetchedAt: text("fetched_at").notNull(),
+  },
+  (t) => [uniqueIndex("ux_news_url").on(t.url)],
+);
+
 export const scrapeRuns = sqliteTable("scrape_runs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   source: text("source").notNull(), // listone | statistiche | probabili
