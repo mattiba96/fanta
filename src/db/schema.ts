@@ -10,6 +10,7 @@ import {
 
 export const teams = sqliteTable("teams", {
   id: integer("id").primaryKey({ autoIncrement: true }),
+  externalId: integer("external_id").unique(), // id numerico fantacalcio.it (es. Inter=9) — join più robusto di code/name
   code: text("code").notNull().unique(), // es. "INT", "ATA" — join da listone/statistiche
   name: text("name").notNull().unique(), // es. "Inter" — join dalle probabili formazioni
   slug: text("slug").notNull().unique(),
@@ -182,6 +183,45 @@ export const watchlist = sqliteTable("watchlist", {
   priority: integer("priority"),
   note: text("note"),
 });
+
+export const setPieceRoles = sqliteTable(
+  "set_piece_roles",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    teamId: integer("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // penalty | free_kick | corner
+    priority: integer("priority").notNull(), // 1 = primo rigorista/tiratore, 2 = alternativa, ...
+    playerId: integer("player_id").references(() => players.id), // NULL se non matchato
+    rawName: text("raw_name").notNull(),
+    season: text("season").notNull(),
+    sourceUrl: text("source_url"),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [
+    uniqueIndex("ux_set_piece_role").on(
+      t.teamId,
+      t.kind,
+      t.priority,
+      t.season,
+    ),
+    index("ix_set_piece_player").on(t.playerId),
+  ],
+);
+
+export const unmatchedNames = sqliteTable(
+  "unmatched_names",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    source: text("source").notNull(), // statistiche | listone | probabili | set_piece_roles
+    rawName: text("raw_name").notNull(),
+    teamId: integer("team_id").references(() => teams.id),
+    seenCount: integer("seen_count").notNull().default(1),
+    lastSeenAt: text("last_seen_at").notNull(),
+  },
+  (t) => [uniqueIndex("ux_unmatched").on(t.source, t.rawName, t.teamId)],
+);
 
 export const scrapeRuns = sqliteTable("scrape_runs", {
   id: integer("id").primaryKey({ autoIncrement: true }),

@@ -1,0 +1,91 @@
+import fs from "node:fs";
+import path from "node:path";
+import crypto from "node:crypto";
+
+const USER_AGENT =
+  "FantAstaLocale/1.0 (assistente personale non commerciale, uso privato)";
+const CACHE_DIR = path.resolve(process.cwd(), "data/cache");
+const MIN_DELAY_MS = 1500;
+
+let lastRequestAt = 0;
+
+async function throttle() {
+  const wait = MIN_DELAY_MS - (Date.now() - lastRequestAt);
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastRequestAt = Date.now();
+}
+
+function hashOf(s: string) {
+  return crypto.createHash("sha256").update(s).digest("hex");
+}
+
+function cachePath(cacheKey: string) {
+  const safe = cacheKey.replace(/[^a-z0-9-_]/gi, "_");
+  return path.join(CACHE_DIR, `${safe}.html`);
+}
+
+async function fetchWithRetry(url: string, attempt = 1): Promise<string> {
+  await throttle();
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
+  try {
+    const res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT, "Accept-Language": "it-IT" },
+      signal: controller.signal,
+    });
+    if ((res.status === 429 || res.status >= 500) && attempt < 3) {
+      const retryAfterHeader = Number(res.headers.get("retry-after"));
+      const waitSeconds = Number.isFinite(retryAfterHeader)
+        ? retryAfterHeader
+        : attempt * 2;
+      await new Promise((r) => setTimeout(r, waitSeconds * 1000));
+      return fetchWithRetry(url, attempt + 1);
+    }
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status} per ${url}`);
+    }
+    return await res.text();
+  } catch (err) {
+    const isAbort = err instanceof Error && err.name === "AbortError";
+    if (!isAbort && attempt < 3) {
+      await new Promise((r) => setTimeout(r, attempt * 1500));
+      return fetchWithRetry(url, attempt + 1);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export type FetchHtmlResult = { html: string; fromCache: boolean; hash: string };
+
+/**
+ * Fetch onesto verso siti terzi: user-agent dichiarato, richieste sequenziali
+ * con throttle, retry minimo solo su errori di rete/5xx/429, e cache su disco
+ * per non rifare richieste inutili (permette anche di sviluppare i parser offline).
+ */
+export async function fetchHtml(
+  url: string,
+  opts: { cacheKey: string; maxAgeMinutes?: number; force?: boolean },
+): Promise<FetchHtmlResult> {
+  const maxAgeMinutes = opts.maxAgeMinutes ?? 360;
+  const file = cachePath(opts.cacheKey);
+
+  if (!opts.force && fs.existsSync(file)) {
+    const ageMinutes = (Date.now() - fs.statSync(file).mtimeMs) / 60000;
+    if (ageMinutes < maxAgeMinutes) {
+      const html = fs.readFileSync(file, "utf-8");
+      return { html, fromCache: true, hash: hashOf(html) };
+    }
+  }
+
+  const html = await fetchWithRetry(url);
+  fs.mkdirSync(CACHE_DIR, { recursive: true });
+  fs.writeFileSync(file, html, "utf-8");
+  return { html, fromCache: false, hash: hashOf(html) };
+}
+
+export function readCachedHtml(cacheKey: string): string | null {
+  const file = cachePath(cacheKey);
+  return fs.existsSync(file) ? fs.readFileSync(file, "utf-8") : null;
+}

@@ -3,30 +3,33 @@ import { teams } from "./schema";
 import { sql } from "drizzle-orm";
 
 // Le 20 squadre di Serie A 2026/27 (fonte: Wikipedia, verificato 17/08/2026).
-// `code` è la sigla a 3 lettere usata da fantacalcio.it in listone/statistiche;
-// se lo scraper trova sigle diverse, normalize.ts deve risolverle comunque
-// per nome (le probabili formazioni usano il nome pieno).
+// `externalId` è l'id numerico interno di fantacalcio.it (da data-filter-team-id
+// e dal filtro Squadra su /statistiche-serie-a, verificato via fetch reale) — è la
+// chiave di join più robusta. `code` (sigla 3 lettere) verificato sugli stessi dati
+// per 17/20 squadre; per le 3 neopromosse (Frosinone/Monza/Venezia, assenti dalle
+// statistiche 2025/26 perché in Serie B l'anno scorso) è la sigla standard attesa,
+// da confermare al primo scraping reale (finiscono in "nomi non riconosciuti" se sbagliata).
 const SERIE_A_TEAMS_2026_27 = [
-  { code: "ATA", name: "Atalanta", slug: "atalanta" },
-  { code: "BOL", name: "Bologna", slug: "bologna" },
-  { code: "CAG", name: "Cagliari", slug: "cagliari" },
-  { code: "COM", name: "Como", slug: "como" },
-  { code: "FIO", name: "Fiorentina", slug: "fiorentina" },
-  { code: "FRO", name: "Frosinone", slug: "frosinone" },
-  { code: "GEN", name: "Genoa", slug: "genoa" },
-  { code: "INT", name: "Inter", slug: "inter" },
-  { code: "JUV", name: "Juventus", slug: "juventus" },
-  { code: "LAZ", name: "Lazio", slug: "lazio" },
-  { code: "LEC", name: "Lecce", slug: "lecce" },
-  { code: "MIL", name: "Milan", slug: "milan" },
-  { code: "MON", name: "Monza", slug: "monza" },
-  { code: "NAP", name: "Napoli", slug: "napoli" },
-  { code: "PAR", name: "Parma", slug: "parma" },
-  { code: "ROM", name: "Roma", slug: "roma" },
-  { code: "SAS", name: "Sassuolo", slug: "sassuolo" },
-  { code: "TOR", name: "Torino", slug: "torino" },
-  { code: "UDI", name: "Udinese", slug: "udinese" },
-  { code: "VEN", name: "Venezia", slug: "venezia" },
+  { externalId: 1, code: "ATA", name: "Atalanta", slug: "atalanta" },
+  { externalId: 2, code: "BOL", name: "Bologna", slug: "bologna" },
+  { externalId: 21, code: "CAG", name: "Cagliari", slug: "cagliari" },
+  { externalId: 153, code: "COM", name: "Como", slug: "como" },
+  { externalId: 6, code: "FIO", name: "Fiorentina", slug: "fiorentina" },
+  { externalId: 7, code: "FRO", name: "Frosinone", slug: "frosinone" },
+  { externalId: 8, code: "GEN", name: "Genoa", slug: "genoa" },
+  { externalId: 9, code: "INT", name: "Inter", slug: "inter" },
+  { externalId: 10, code: "JUV", name: "Juventus", slug: "juventus" },
+  { externalId: 11, code: "LAZ", name: "Lazio", slug: "lazio" },
+  { externalId: 119, code: "LEC", name: "Lecce", slug: "lecce" },
+  { externalId: 12, code: "MIL", name: "Milan", slug: "milan" },
+  { externalId: 143, code: "MON", name: "Monza", slug: "monza" },
+  { externalId: 13, code: "NAP", name: "Napoli", slug: "napoli" },
+  { externalId: 107, code: "PAR", name: "Parma", slug: "parma" },
+  { externalId: 15, code: "ROM", name: "Roma", slug: "roma" },
+  { externalId: 17, code: "SAS", name: "Sassuolo", slug: "sassuolo" },
+  { externalId: 18, code: "TOR", name: "Torino", slug: "torino" },
+  { externalId: 19, code: "UDI", name: "Udinese", slug: "udinese" },
+  { externalId: 138, code: "VEN", name: "Venezia", slug: "venezia" },
 ];
 
 async function main() {
@@ -36,7 +39,7 @@ async function main() {
       .values(team)
       .onConflictDoUpdate({
         target: teams.slug,
-        set: { code: team.code, name: team.name },
+        set: { code: team.code, name: team.name, externalId: team.externalId },
       });
   }
   const count = rawDb.prepare("SELECT COUNT(*) as n FROM teams").get() as {
