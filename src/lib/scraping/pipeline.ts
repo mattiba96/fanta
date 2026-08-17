@@ -45,6 +45,8 @@ export async function finishRunError(runId: number, message: string) {
  * matching/risoluzione (che ha bisogno di query async) va fatta PRIMA, fuori
  * da qui: questo helper esegue solo le scritture pure, in un'unica transazione.
  */
-export function runWriteTransaction<T>(fn: (tx: typeof db) => T): T {
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+export function runWriteTransaction<T>(fn: (tx: Tx) => T): T {
   return db.transaction((tx) => fn(tx));
 }
