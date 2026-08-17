@@ -157,17 +157,52 @@ export async function matchPlayer(opts: {
       .where(eq(players.teamId, opts.teamId));
     let best: { id: number; score: number } | null = null;
     for (const c of candidates) {
-      const d = distance(normalized, c.normalizedName);
-      const maxLen = Math.max(normalized.length, c.normalizedName.length, 1);
-      const similarity = 1 - d / maxLen;
-      if (similarity >= FUZZY_THRESHOLD && (!best || similarity > best.score)) {
-        best = { id: c.id, score: similarity };
+      const score = fuzzyNameScore(normalized, c.normalizedName);
+      if (score > 0 && (!best || score > best.score)) {
+        best = { id: c.id, score };
       }
     }
     if (best) return { playerId: best.id, method: "fuzzy", score: best.score };
   }
 
   return { playerId: null, method: "unmatched" };
+}
+
+/**
+ * Punteggio di somiglianza tra due nomi normalizzati, pensato per lo scenario
+ * pratico più comune tra fonti diverse: fantacalcio.it scrive "Cognome I."
+ * (es. "Martinez L."), altre fonti scrivono "Nome Cognome" (es. "Lautaro
+ * Martinez") o il solo cognome (es. "Zapata"). Un token intero condiviso di
+ * almeno 4 lettere (tipicamente il cognome) è un segnale forte indipendente
+ * dall'ordine delle parole; le iniziali residue disambiguano tra due giocatori
+ * con lo stesso cognome nella stessa squadra (es. due "Martinez"). In assenza
+ * di un token condiviso, ripiega sulla similarità carattere-per-carattere.
+ */
+function fuzzyNameScore(a: string, b: string): number {
+  const tokensA = a.split(" ").filter(Boolean);
+  const tokensB = b.split(" ").filter(Boolean);
+
+  const sharedLong = tokensA.filter((t) => t.length >= 4 && tokensB.includes(t));
+  const sharedLongScore = sharedLong.reduce((sum, t) => sum + t.length, 0);
+
+  if (sharedLongScore > 0) {
+    const remainingA = tokensA.filter((t) => !sharedLong.includes(t));
+    const remainingB = tokensB.filter((t) => !sharedLong.includes(t));
+    let initialScore = 0;
+    for (const ra of remainingA) {
+      for (const rb of remainingB) {
+        if (ra[0] === rb[0]) initialScore += 1;
+      }
+    }
+    return sharedLongScore + initialScore * 2;
+  }
+
+  const d = distance(a, b);
+  const maxLen = Math.max(a.length, b.length, 1);
+  const similarity = 1 - d / maxLen;
+  // scala diversa da sharedLongScore (che parte da 4): confrontabili perché
+  // qui contano solo i punteggi sopra soglia, mai la grandezza assoluta tra i due rami.
+  return similarity >= FUZZY_THRESHOLD ? similarity * 10 : 0;
 }
 
 /**

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { refreshStatistiche, refreshListone, type RefreshOutcome } from "@/actions/data";
+import { refreshStatistiche, refreshListone, refreshSetPieces, type RefreshOutcome } from "@/actions/data";
 
 type ButtonState = { pending: boolean; result: RefreshOutcome | null };
 
@@ -24,6 +24,7 @@ function useRefreshButton(action: () => Promise<RefreshOutcome>) {
 export function UpdateDataButtons() {
   const [statsState, runStats] = useRefreshButton(refreshStatistiche);
   const [listoneState, runListone] = useRefreshButton(refreshListone);
+  const [setPiecesState, runSetPieces] = useRefreshButton(refreshSetPieces);
 
   return (
     <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
@@ -36,6 +37,11 @@ export function UpdateDataButtons() {
         label="Aggiorna listone"
         state={listoneState}
         onClick={runListone}
+      />
+      <RefreshButton
+        label="Aggiorna rigoristi/tiratori"
+        state={setPiecesState}
+        onClick={runSetPieces}
       />
     </div>
   );
