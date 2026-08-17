@@ -30,12 +30,26 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
+# env files (.env.example is committable: no secrets, documents required vars)
 .env*
+!.env.example
 
 # vercel
 .vercel
 
+# app data (generated locally, never committed)
+/data/*.db
+/data/*.db-*
+/data/cache/*
+!/data/cache/.gitkeep
+/data/backups/*
+!/data/backups/.gitkeep
+/data/imports/*
+!/data/imports/.gitkeep
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# claude code local session settings (machine/session-specific)
+.claude/settings.local.json
