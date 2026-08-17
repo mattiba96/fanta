@@ -5,6 +5,7 @@ import { desc } from "drizzle-orm";
 import { UpdateDataButtons } from "@/components/data/UpdateDataButtons";
 import { AuctionSettingsForm } from "@/components/auction/AuctionSettingsForm";
 import { ParticipantsManager } from "@/components/auction/ParticipantsManager";
+import { BackupControls } from "@/components/auction/BackupControls";
 import { getAuctionSettings } from "@/lib/queries/auction";
 import { getParticipantSummaries } from "@/lib/queries/participants";
 
@@ -41,6 +42,11 @@ export default async function ImpostazioniPage() {
       <section className="mb-8">
         <h2 className="mb-2 text-sm font-medium text-zinc-500">Aggiornamento dati</h2>
         <UpdateDataButtons />
+      </section>
+
+      <section className="mb-8">
+        <h2 className="mb-2 text-sm font-medium text-zinc-500">Backup asta</h2>
+        <BackupControls />
       </section>
 
       <section>
