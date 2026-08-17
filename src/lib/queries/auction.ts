@@ -1,6 +1,6 @@
 import { desc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { auctionSettings, auctionPicks, players, teams } from "@/db/schema";
+import { auctionSettings, auctionPicks, players, teams, leagueParticipants } from "@/db/schema";
 import { nowIso } from "@/lib/scraping/normalize";
 
 export type AuctionSettings = typeof auctionSettings.$inferSelect;
@@ -53,8 +53,24 @@ export type AuctionState = {
   roster: RosterEntry[];
 };
 
+export async function getOrCreateMyParticipantId(): Promise<number> {
+  const [me] = await db
+    .select({ id: leagueParticipants.id })
+    .from(leagueParticipants)
+    .where(eq(leagueParticipants.isMe, 1))
+    .limit(1);
+  if (me) return me.id;
+
+  const [created] = await db
+    .insert(leagueParticipants)
+    .values({ name: "Io", isMe: 1, displayOrder: 0, createdAt: nowIso() })
+    .returning({ id: leagueParticipants.id });
+  return created.id;
+}
+
 export async function getAuctionState(): Promise<AuctionState> {
   const settings = await getAuctionSettings();
+  const myParticipantId = await getOrCreateMyParticipantId();
 
   const myPicks = await db
     .select({
@@ -69,7 +85,7 @@ export async function getAuctionState(): Promise<AuctionState> {
     .from(auctionPicks)
     .innerJoin(players, eq(players.id, auctionPicks.playerId))
     .innerJoin(teams, eq(teams.id, players.teamId))
-    .where(eq(auctionPicks.owner, "me"))
+    .where(eq(auctionPicks.participantId, myParticipantId))
     .orderBy(desc(auctionPicks.pickedAt));
 
   const slotsFilled: AuctionState["slotsFilled"] = { P: 0, D: 0, C: 0, A: 0 };

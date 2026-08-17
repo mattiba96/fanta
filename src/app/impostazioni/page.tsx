@@ -4,14 +4,17 @@ import { scrapeRuns } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { UpdateDataButtons } from "@/components/data/UpdateDataButtons";
 import { AuctionSettingsForm } from "@/components/auction/AuctionSettingsForm";
+import { ParticipantsManager } from "@/components/auction/ParticipantsManager";
 import { getAuctionSettings } from "@/lib/queries/auction";
+import { getParticipantSummaries } from "@/lib/queries/participants";
 
 export const dynamic = "force-dynamic";
 
 export default async function ImpostazioniPage() {
-  const [runs, settings] = await Promise.all([
+  const [runs, settings, participants] = await Promise.all([
     db.select().from(scrapeRuns).orderBy(desc(scrapeRuns.startedAt)).limit(10),
     getAuctionSettings(),
+    getParticipantSummaries(),
   ]);
 
   return (
@@ -28,6 +31,11 @@ export default async function ImpostazioniPage() {
       <section className="mb-8">
         <h2 className="mb-2 text-sm font-medium text-zinc-500">Asta: budget e slot</h2>
         <AuctionSettingsForm settings={settings} />
+      </section>
+
+      <section className="mb-8">
+        <h2 className="mb-2 text-sm font-medium text-zinc-500">Squadre in lega</h2>
+        <ParticipantsManager participants={participants} />
       </section>
 
       <section className="mb-8">

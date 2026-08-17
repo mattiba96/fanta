@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getAuctionState } from "@/lib/queries/auction";
+import { getParticipantSummaries } from "@/lib/queries/participants";
 import { QuickAssignControl } from "@/components/auction/QuickAssignControl";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,10 @@ const ROLE_LABELS: Record<"P" | "D" | "C" | "A", string> = {
 };
 
 export default async function AstaPage() {
-  const state = await getAuctionState();
+  const [state, participants] = await Promise.all([
+    getAuctionState(),
+    getParticipantSummaries(),
+  ]);
 
   return (
     <div className="min-h-screen bg-zinc-50 p-6 font-sans dark:bg-black sm:p-10">
@@ -20,9 +24,14 @@ export default async function AstaPage() {
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
           La mia asta
         </h1>
-        <Link href="/" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
-          ← Dashboard
-        </Link>
+        <nav className="flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
+          <Link href="/sfoglia" className="hover:underline">
+            Sfoglia giocatori
+          </Link>
+          <Link href="/" className="hover:underline">
+            ← Dashboard
+          </Link>
+        </nav>
       </header>
 
       <div className="mb-8 grid grid-cols-2 gap-4 sm:grid-cols-4">
@@ -50,6 +59,40 @@ export default async function AstaPage() {
         </div>
       </section>
 
+      <section className="mb-8">
+        <h2 className="mb-3 text-sm font-medium text-zinc-500">Tutte le squadre</h2>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {participants.map((p) => (
+            <div
+              key={p.id}
+              className={`rounded-md border p-3 ${
+                p.isMe
+                  ? "border-zinc-900 bg-white dark:border-zinc-100 dark:bg-zinc-900"
+                  : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900"
+              }`}
+            >
+              <p className="mb-1 truncate text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                {p.isMe ? `${p.name} (tu)` : p.name}
+              </p>
+              <p className="text-xs text-zinc-500">
+                Residuo <span className="font-semibold text-zinc-900 dark:text-zinc-50">{p.budgetRemaining}</span>
+              </p>
+              <p className="text-xs text-zinc-500">
+                Punta max <span className="font-semibold text-zinc-900 dark:text-zinc-50">{p.maxBid}</span>
+              </p>
+              <p className="text-xs text-zinc-500">{p.rosterCount} giocatori</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-zinc-400">
+          Gestisci le squadre (aggiungi/rinomina) in{" "}
+          <Link href="/impostazioni" className="underline">
+            Impostazioni
+          </Link>
+          .
+        </p>
+      </section>
+
       <section>
         <h2 className="mb-3 text-sm font-medium text-zinc-500">La mia rosa</h2>
         <div className="overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
@@ -75,8 +118,10 @@ export default async function AstaPage() {
                       playerId={entry.playerId}
                       roleClassic={entry.roleClassic}
                       isAvailable={false}
-                      ownedBy="me"
+                      ownedByName={null}
+                      ownedByIsMe={true}
                       pricePaid={entry.price}
+                      participants={participants}
                     />
                   </td>
                 </tr>

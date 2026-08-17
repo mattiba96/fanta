@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { PlayerRow } from "@/lib/queries/players";
-import { QuickAssignControl } from "@/components/auction/QuickAssignControl";
+import { QuickAssignControl, type ParticipantOption } from "@/components/auction/QuickAssignControl";
 
 type SortKey = "quotCurrentClassic" | "fvmClassic" | "mv" | "fm" | "goals" | "assists";
 
@@ -15,7 +15,13 @@ const ROLES: { value: string; label: string }[] = [
   { value: "A", label: "Attaccante" },
 ];
 
-export function PlayersTable({ players }: { players: PlayerRow[] }) {
+export function PlayersTable({
+  players,
+  participants,
+}: {
+  players: PlayerRow[];
+  participants: ParticipantOption[];
+}) {
   const [search, setSearch] = useState("");
   const [role, setRole] = useState("");
   const [team, setTeam] = useState("");
@@ -144,8 +150,10 @@ export function PlayersTable({ players }: { players: PlayerRow[] }) {
                     playerId={p.id}
                     roleClassic={p.roleClassic}
                     isAvailable={p.isAvailable}
-                    ownedBy={p.ownedBy}
+                    ownedByName={p.ownedByName}
+                    ownedByIsMe={p.ownedByIsMe}
                     pricePaid={p.pricePaid}
+                    participants={participants}
                   />
                 </td>
               </tr>

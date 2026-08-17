@@ -162,14 +162,23 @@ export const auctionSettings = sqliteTable("auction_settings", {
   updatedAt: text("updated_at").notNull(),
 });
 
+export const leagueParticipants = sqliteTable("league_participants", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  isMe: integer("is_me").notNull().default(0), // esattamente un partecipante rappresenta l'utente
+  displayOrder: integer("display_order").notNull().default(0),
+  createdAt: text("created_at").notNull(),
+});
+
 export const auctionPicks = sqliteTable("auction_picks", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   playerId: integer("player_id")
     .notNull()
     .unique()
     .references(() => players.id, { onDelete: "cascade" }),
-  owner: text("owner").notNull(), // 'me' | 'other'
-  ownerLabel: text("owner_label"),
+  participantId: integer("participant_id")
+    .notNull()
+    .references(() => leagueParticipants.id, { onDelete: "cascade" }),
   price: integer("price").notNull().default(0),
   roleSlot: text("role_slot"), // P/D/C/A
   pickedAt: text("picked_at").notNull(),

@@ -10,12 +10,11 @@ export type ActionResult = { ok: boolean; message?: string };
 
 export async function assignPlayer(input: {
   playerId: number;
-  owner: "me" | "other";
+  participantId: number;
   price: number;
-  ownerLabel?: string;
   roleSlot?: string | null;
 }): Promise<ActionResult> {
-  if (!Number.isFinite(input.playerId) || input.price < 0) {
+  if (!Number.isFinite(input.playerId) || !Number.isFinite(input.participantId) || input.price < 0) {
     return { ok: false, message: "Dati non validi." };
   }
 
@@ -24,17 +23,15 @@ export async function assignPlayer(input: {
       .insert(auctionPicks)
       .values({
         playerId: input.playerId,
-        owner: input.owner,
-        ownerLabel: input.ownerLabel || null,
-        price: input.owner === "me" ? input.price : (input.price ?? 0),
+        participantId: input.participantId,
+        price: input.price,
         roleSlot: input.roleSlot ?? null,
         pickedAt: nowIso(),
       })
       .onConflictDoUpdate({
         target: auctionPicks.playerId,
         set: {
-          owner: input.owner,
-          ownerLabel: input.ownerLabel || null,
+          participantId: input.participantId,
           price: input.price,
           roleSlot: input.roleSlot ?? null,
           pickedAt: nowIso(),
@@ -46,6 +43,7 @@ export async function assignPlayer(input: {
 
   revalidatePath("/");
   revalidatePath("/asta");
+  revalidatePath("/sfoglia");
   revalidatePath("/giocatori/[slug]", "page");
   return { ok: true };
 }
@@ -54,6 +52,7 @@ export async function undoPick(playerId: number): Promise<ActionResult> {
   await db.delete(auctionPicks).where(eq(auctionPicks.playerId, playerId));
   revalidatePath("/");
   revalidatePath("/asta");
+  revalidatePath("/sfoglia");
   revalidatePath("/giocatori/[slug]", "page");
   return { ok: true };
 }
@@ -83,12 +82,5 @@ export async function saveAuctionSettings(input: {
 
   revalidatePath("/asta");
   revalidatePath("/impostazioni");
-  return { ok: true };
-}
-
-export async function resetAuction(): Promise<ActionResult> {
-  await db.delete(auctionPicks);
-  revalidatePath("/");
-  revalidatePath("/asta");
   return { ok: true };
 }

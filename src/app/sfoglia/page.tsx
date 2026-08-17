@@ -1,11 +1,11 @@
 import Link from "next/link";
 import { getAllPlayersFull } from "@/lib/queries/players";
 import { getParticipantSummaries } from "@/lib/queries/participants";
-import { PlayersTable } from "@/components/players/PlayersTable";
+import { BrowsePlayers } from "@/components/players/BrowsePlayers";
 
 export const dynamic = "force-dynamic";
 
-export default async function Home() {
+export default async function SfogliaPage() {
   const [players, participants] = await Promise.all([
     getAllPlayersFull(),
     getParticipantSummaries(),
@@ -15,32 +15,19 @@ export default async function Home() {
     <div className="min-h-screen bg-zinc-50 p-6 font-sans dark:bg-black sm:p-10">
       <header className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-          FantAsta
+          Sfoglia giocatori
         </h1>
         <nav className="flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
-          <Link href="/sfoglia" className="hover:underline">
-            Sfoglia
-          </Link>
           <Link href="/asta" className="hover:underline">
             La mia asta
           </Link>
-          <Link href="/impostazioni" className="hover:underline">
-            Impostazioni
+          <Link href="/" className="hover:underline">
+            ← Dashboard
           </Link>
         </nav>
       </header>
 
-      {players.length === 0 ? (
-        <p className="text-zinc-500">
-          Nessun giocatore in database. Vai in{" "}
-          <Link href="/impostazioni" className="underline">
-            Impostazioni
-          </Link>{" "}
-          e aggiorna listone e statistiche.
-        </p>
-      ) : (
-        <PlayersTable players={players} participants={participants} />
-      )}
+      <BrowsePlayers players={players} participants={participants} />
     </div>
   );
 }

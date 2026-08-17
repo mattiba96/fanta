@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPlayerBySlug } from "@/lib/queries/players";
+import { getParticipantSummaries } from "@/lib/queries/participants";
 import { RoleBadge } from "@/components/players/PlayersTable";
 import { QuickAssignControl } from "@/components/auction/QuickAssignControl";
 
@@ -12,7 +13,10 @@ export default async function PlayerDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const data = await getPlayerBySlug(slug);
+  const [data, participants] = await Promise.all([
+    getPlayerBySlug(slug),
+    getParticipantSummaries(),
+  ]);
   if (!data) notFound();
 
   const { player, team, stats, pick } = data;
@@ -36,8 +40,10 @@ export default async function PlayerDetailPage({
           playerId={player.id}
           roleClassic={player.roleClassic}
           isAvailable={!pick}
-          ownedBy={(pick?.owner as "me" | "other" | null) ?? null}
+          ownedByName={pick?.participantName ?? null}
+          ownedByIsMe={pick?.participantIsMe === 1}
           pricePaid={pick?.price ?? null}
+          participants={participants}
         />
       </div>
 

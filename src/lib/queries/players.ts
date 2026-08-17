@@ -1,6 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "@/db/client";
-import { players, teams, playerSeasonStats, auctionPicks } from "@/db/schema";
+import { players, teams, playerSeasonStats, auctionPicks, leagueParticipants } from "@/db/schema";
 
 // TODO(task #6 - gestione asta): leggere da auction_settings.statsSeason una volta
 // che le impostazioni sono configurabili; per ora la stagione di riferimento per
@@ -25,7 +25,9 @@ export type PlayerRow = {
   goals: number | null;
   assists: number | null;
   isAvailable: boolean;
-  ownedBy: "me" | "other" | null;
+  ownedByParticipantId: number | null;
+  ownedByName: string | null;
+  ownedByIsMe: boolean;
   pricePaid: number | null;
 };
 
@@ -50,8 +52,10 @@ export async function getAllPlayersFull(
       fm: playerSeasonStats.fm,
       goals: playerSeasonStats.goals,
       assists: playerSeasonStats.assists,
-      owner: auctionPicks.owner,
       pricePaid: auctionPicks.price,
+      ownedByParticipantId: leagueParticipants.id,
+      ownedByName: leagueParticipants.name,
+      ownedByIsMe: leagueParticipants.isMe,
     })
     .from(players)
     .innerJoin(teams, eq(teams.id, players.teamId))
@@ -63,12 +67,13 @@ export async function getAllPlayersFull(
       ),
     )
     .leftJoin(auctionPicks, eq(auctionPicks.playerId, players.id))
+    .leftJoin(leagueParticipants, eq(leagueParticipants.id, auctionPicks.participantId))
     .where(eq(players.isActive, 1));
 
   return rows.map((r) => ({
     ...r,
-    isAvailable: r.owner == null,
-    ownedBy: (r.owner as "me" | "other" | null) ?? null,
+    isAvailable: r.ownedByParticipantId == null,
+    ownedByIsMe: r.ownedByIsMe === 1,
   }));
 }
 
@@ -93,8 +98,15 @@ export async function getPlayerBySlug(slug: string) {
     .limit(1);
 
   const [pick] = await db
-    .select()
+    .select({
+      id: auctionPicks.id,
+      price: auctionPicks.price,
+      participantId: auctionPicks.participantId,
+      participantName: leagueParticipants.name,
+      participantIsMe: leagueParticipants.isMe,
+    })
     .from(auctionPicks)
+    .innerJoin(leagueParticipants, eq(leagueParticipants.id, auctionPicks.participantId))
     .where(eq(auctionPicks.playerId, row.players.id))
     .limit(1);
 
