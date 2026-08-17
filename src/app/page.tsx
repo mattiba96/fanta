@@ -21,6 +21,9 @@ export default async function Home() {
           <Link href="/sfoglia" className="hover:underline">
             Sfoglia
           </Link>
+          <Link href="/formazioni" className="hover:underline">
+            Formazioni
+          </Link>
           <Link href="/asta" className="hover:underline">
             La mia asta
           </Link>

@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getPlayerBySlug } from "@/lib/queries/players";
 import { getParticipantSummaries } from "@/lib/queries/participants";
 import { getTeamSetPieces } from "@/lib/queries/setPieces";
+import { getPlayerLineupStatus } from "@/lib/queries/lineups";
 import { RoleBadge } from "@/components/players/PlayersTable";
 import { QuickAssignControl } from "@/components/auction/QuickAssignControl";
 
@@ -13,6 +14,24 @@ const KIND_LABELS = {
   free_kick: "Punizioni",
   corner: "Corner",
 } as const;
+
+const LINEUP_STATUS_LABELS: Record<string, string> = {
+  starter: "Titolare",
+  bench: "Panchina",
+  doubt: "In dubbio",
+  injured: "Infortunato",
+  suspended: "Squalificato",
+  warned: "Diffidato",
+};
+
+const LINEUP_STATUS_COLORS: Record<string, string> = {
+  starter: "text-emerald-600 dark:text-emerald-400",
+  bench: "text-zinc-500",
+  doubt: "text-amber-600 dark:text-amber-400",
+  injured: "text-red-600 dark:text-red-400",
+  suspended: "text-red-600 dark:text-red-400",
+  warned: "text-amber-600 dark:text-amber-400",
+};
 
 export default async function PlayerDetailPage({
   params,
@@ -27,7 +46,10 @@ export default async function PlayerDetailPage({
   if (!data) notFound();
 
   const { player, team, stats, pick } = data;
-  const setPieces = await getTeamSetPieces(team.id);
+  const [setPieces, lineupStatus] = await Promise.all([
+    getTeamSetPieces(team.id),
+    getPlayerLineupStatus(player.id),
+  ]);
 
   return (
     <div className="min-h-screen bg-zinc-50 p-6 font-sans dark:bg-black sm:p-10">
@@ -54,6 +76,21 @@ export default async function PlayerDetailPage({
           participants={participants}
         />
       </div>
+
+      {lineupStatus.length > 0 && (
+        <div className="mb-6 flex flex-wrap gap-2">
+          {lineupStatus.map((ls, i) => (
+            <span
+              key={i}
+              className={`rounded-md border border-zinc-200 px-2 py-1 text-xs dark:border-zinc-800 ${LINEUP_STATUS_COLORS[ls.status] ?? ""}`}
+            >
+              {LINEUP_STATUS_LABELS[ls.status] ?? ls.status}
+              {ls.probability != null && ` (${ls.probability}%)`}
+              {ls.note && ` — ${ls.note}`}
+            </span>
+          ))}
+        </div>
+      )}
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Quotazione (Classic)" value={player.quotCurrentClassic} />

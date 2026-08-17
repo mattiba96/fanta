@@ -1,7 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { refreshStatistiche, refreshListone, refreshSetPieces, type RefreshOutcome } from "@/actions/data";
+import {
+  refreshStatistiche,
+  refreshListone,
+  refreshSetPieces,
+  refreshProbabiliFormazioni,
+  type RefreshOutcome,
+} from "@/actions/data";
 
 type ButtonState = { pending: boolean; result: RefreshOutcome | null };
 
@@ -25,9 +31,10 @@ export function UpdateDataButtons() {
   const [statsState, runStats] = useRefreshButton(refreshStatistiche);
   const [listoneState, runListone] = useRefreshButton(refreshListone);
   const [setPiecesState, runSetPieces] = useRefreshButton(refreshSetPieces);
+  const [probabiliState, runProbabili] = useRefreshButton(refreshProbabiliFormazioni);
 
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:flex-wrap">
       <RefreshButton
         label="Aggiorna statistiche"
         state={statsState}
@@ -42,6 +49,11 @@ export function UpdateDataButtons() {
         label="Aggiorna rigoristi/tiratori"
         state={setPiecesState}
         onClick={runSetPieces}
+      />
+      <RefreshButton
+        label="Aggiorna probabili formazioni"
+        state={probabiliState}
+        onClick={runProbabili}
       />
     </div>
   );

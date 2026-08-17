@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import * as statistiche from "@/lib/scraping/sources/statistiche";
 import * as listone from "@/lib/scraping/sources/listone";
 import * as setPieces from "@/lib/scraping/sources/setPieces";
+import * as probabiliFormazioni from "@/lib/scraping/sources/probabiliFormazioni";
 import { DEFAULT_STATS_SEASON } from "@/lib/queries/players";
 
 export type RefreshOutcome = {
@@ -53,6 +54,23 @@ export async function refreshSetPieces(): Promise<RefreshOutcome> {
       message: result.ok
         ? `Rigoristi/tiratori: ${result.rowsInserted} righe inserite, ${result.rowsUnmatched} non abbinate.`
         : `Aggiornamento interrotto: solo ${result.rowsSeen} righe trovate.`,
+    };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function refreshProbabiliFormazioni(): Promise<RefreshOutcome> {
+  try {
+    const result = await probabiliFormazioni.run();
+    revalidatePath("/");
+    revalidatePath("/formazioni");
+    revalidatePath("/giocatori/[slug]", "page");
+    return {
+      ok: result.ok,
+      message: result.ok
+        ? `Probabili formazioni: ${result.matchesSeen} partite, ${result.playersInserted} righe, ${result.playersUnmatched} non abbinate.`
+        : `Aggiornamento interrotto: solo ${result.matchesSeen} partite trovate.`,
     };
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : String(err) };
