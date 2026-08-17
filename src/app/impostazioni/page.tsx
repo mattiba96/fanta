@@ -3,15 +3,16 @@ import { db } from "@/db/client";
 import { scrapeRuns } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { UpdateDataButtons } from "@/components/data/UpdateDataButtons";
+import { AuctionSettingsForm } from "@/components/auction/AuctionSettingsForm";
+import { getAuctionSettings } from "@/lib/queries/auction";
 
 export const dynamic = "force-dynamic";
 
 export default async function ImpostazioniPage() {
-  const runs = await db
-    .select()
-    .from(scrapeRuns)
-    .orderBy(desc(scrapeRuns.startedAt))
-    .limit(10);
+  const [runs, settings] = await Promise.all([
+    db.select().from(scrapeRuns).orderBy(desc(scrapeRuns.startedAt)).limit(10),
+    getAuctionSettings(),
+  ]);
 
   return (
     <div className="min-h-screen bg-zinc-50 p-6 font-sans dark:bg-black sm:p-10">
@@ -23,6 +24,11 @@ export default async function ImpostazioniPage() {
           ← Dashboard
         </Link>
       </header>
+
+      <section className="mb-8">
+        <h2 className="mb-2 text-sm font-medium text-zinc-500">Asta: budget e slot</h2>
+        <AuctionSettingsForm settings={settings} />
+      </section>
 
       <section className="mb-8">
         <h2 className="mb-2 text-sm font-medium text-zinc-500">Aggiornamento dati</h2>

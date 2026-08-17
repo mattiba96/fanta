@@ -13,12 +13,14 @@ export default async function Home() {
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
           FantAsta
         </h1>
-        <Link
-          href="/impostazioni"
-          className="text-sm text-zinc-500 hover:underline dark:text-zinc-400"
-        >
-          Impostazioni →
-        </Link>
+        <nav className="flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
+          <Link href="/asta" className="hover:underline">
+            La mia asta
+          </Link>
+          <Link href="/impostazioni" className="hover:underline">
+            Impostazioni
+          </Link>
+        </nav>
       </header>
 
       {players.length === 0 ? (

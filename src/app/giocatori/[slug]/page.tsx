@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getPlayerBySlug } from "@/lib/queries/players";
 import { RoleBadge } from "@/components/players/PlayersTable";
+import { QuickAssignControl } from "@/components/auction/QuickAssignControl";
 
 export const dynamic = "force-dynamic";
 
@@ -30,13 +31,15 @@ export default async function PlayerDetailPage({
         <span className="text-zinc-500">{team.name}</span>
       </header>
 
-      {!pick ? (
-        <p className="mb-6 text-sm text-emerald-600">Disponibile</p>
-      ) : (
-        <p className="mb-6 text-sm text-zinc-500">
-          {pick.owner === "me" ? `Preso da te a ${pick.price} crediti` : "Preso da un altro partecipante"}
-        </p>
-      )}
+      <div className="mb-6">
+        <QuickAssignControl
+          playerId={player.id}
+          roleClassic={player.roleClassic}
+          isAvailable={!pick}
+          ownedBy={(pick?.owner as "me" | "other" | null) ?? null}
+          pricePaid={pick?.price ?? null}
+        />
+      </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <Stat label="Quotazione (Classic)" value={player.quotCurrentClassic} />
