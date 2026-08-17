@@ -1,14 +1,17 @@
 import * as cheerio from "cheerio";
+import { eq } from "drizzle-orm";
 import { fetchHtml } from "../http";
 import {
   parseItalianNumber,
   parsePenalties,
   resolveTeamByExternalId,
   resolveOrCreatePlayer,
+  matchPlayer,
   nowIso,
 } from "../normalize";
 import { startRun, finishRunOk, finishRunError, runWriteTransaction } from "../pipeline";
-import { playerSeasonStats } from "@/db/schema";
+import { playerSeasonStats, unmatchedNames } from "@/db/schema";
+import { DEFAULT_STATS_SEASON } from "@/lib/queries/players";
 
 const BASE_URL = "https://www.fantacalcio.it/statistiche-serie-a";
 const MIN_EXPECTED_ROWS = 300; // guard-rail: sotto questa soglia, probabile cambio di struttura del sito
@@ -117,8 +120,15 @@ export type StatisticheRunResult = {
  */
 export async function run(
   season: string,
-  opts: { force?: boolean } = {},
+  opts: { force?: boolean; allowCreate?: boolean } = {},
 ): Promise<StatisticheRunResult> {
+  // Solo la stagione di riferimento (l'ultima completa) ha il diritto di
+  // creare giocatori: è la fonte più ricca per seminare il roster insieme al
+  // listone. Le stagioni precedenti (richieste per avere più storico) sono
+  // solo arricchimento — un nome non riconosciuto lì va loggato, non creato,
+  // altrimenti si popolano giocatori "fantasma" attivi per gente che potrebbe
+  // non essere più nemmeno in Serie A.
+  const allowCreate = opts.allowCreate ?? season === DEFAULT_STATS_SEASON;
   const url = buildUrl(season);
   const runId = await startRun("statistiche", url);
 
@@ -136,7 +146,8 @@ export async function run(
 
     type ResolvedAction =
       | { kind: "write"; playerId: number; created: boolean; row: ParsedPlayerStat }
-      | { kind: "skip_other_team" };
+      | { kind: "skip_other_team" }
+      | { kind: "unmatched"; row: ParsedPlayerStat; teamId: number };
 
     const actions: ResolvedAction[] = [];
     for (const row of rows) {
@@ -145,15 +156,29 @@ export async function run(
         actions.push({ kind: "skip_other_team" });
         continue;
       }
-      const { playerId, created } = await resolveOrCreatePlayer({
-        rawName: row.name,
-        teamId: team.id,
-        teamSlug: team.slug,
-        roleClassic: row.roleClassic || null,
-        rolesMantra: row.roleMantra,
-        externalId: row.externalId,
-      });
-      actions.push({ kind: "write", playerId, created, row });
+
+      if (allowCreate) {
+        const { playerId, created } = await resolveOrCreatePlayer({
+          rawName: row.name,
+          teamId: team.id,
+          teamSlug: team.slug,
+          roleClassic: row.roleClassic || null,
+          rolesMantra: row.roleMantra,
+          externalId: row.externalId,
+        });
+        actions.push({ kind: "write", playerId, created, row });
+      } else {
+        const match = await matchPlayer({
+          rawName: row.name,
+          teamId: team.id,
+          externalId: row.externalId,
+        });
+        if (match.playerId) {
+          actions.push({ kind: "write", playerId: match.playerId, created: false, row });
+        } else {
+          actions.push({ kind: "unmatched", row, teamId: team.id });
+        }
+      }
     }
 
     const now = nowIso();
@@ -162,9 +187,32 @@ export async function run(
       let updated = 0;
       let skipped = 0;
 
+      if (!allowCreate) {
+        tx.delete(unmatchedNames).where(eq(unmatchedNames.source, "statistiche")).run();
+      }
+
       for (const action of actions) {
         if (action.kind === "skip_other_team") {
           skipped++;
+          continue;
+        }
+
+        if (action.kind === "unmatched") {
+          skipped++;
+          tx
+            .insert(unmatchedNames)
+            .values({
+              source: "statistiche",
+              rawName: action.row.name,
+              teamId: action.teamId,
+              seenCount: 1,
+              lastSeenAt: now,
+            })
+            .onConflictDoUpdate({
+              target: [unmatchedNames.source, unmatchedNames.rawName, unmatchedNames.teamId],
+              set: { lastSeenAt: now },
+            })
+            .run();
           continue;
         }
 

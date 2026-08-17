@@ -6,6 +6,11 @@ import { players, teams, playerSeasonStats, auctionPicks, leagueParticipants } f
 // che le impostazioni sono configurabili; per ora la stagione di riferimento per
 // le statistiche pre-asta è fissa (l'unica stagione completa disponibile oggi).
 export const DEFAULT_STATS_SEASON = "2025-26";
+// Stagione aggiuntiva mostrata in scheda giocatore per dare un minimo di
+// storico oltre all'ultima stagione completa (richiesta esplicita: "le
+// statistiche di 2 anni di fantacalcio"). Non è la stagione di riferimento
+// per l'advice engine, solo contesto in più.
+export const SECONDARY_STATS_SEASON = "2024-25";
 
 export type PlayerRow = {
   id: number;
@@ -86,16 +91,15 @@ export async function getPlayerBySlug(slug: string) {
     .limit(1);
   if (!row) return null;
 
-  const [stats] = await db
+  const statsRows = await db
     .select()
     .from(playerSeasonStats)
-    .where(
-      and(
-        eq(playerSeasonStats.playerId, row.players.id),
-        eq(playerSeasonStats.season, DEFAULT_STATS_SEASON),
-      ),
-    )
-    .limit(1);
+    .where(eq(playerSeasonStats.playerId, row.players.id));
+  const statsBySeason = new Map(statsRows.map((s) => [s.season, s]));
+  const stats = statsBySeason.get(DEFAULT_STATS_SEASON) ?? null;
+  const statsHistory = [DEFAULT_STATS_SEASON, SECONDARY_STATS_SEASON]
+    .map((season) => statsBySeason.get(season))
+    .filter((s): s is NonNullable<typeof s> => s != null);
 
   const [pick] = await db
     .select({
@@ -110,5 +114,11 @@ export async function getPlayerBySlug(slug: string) {
     .where(eq(auctionPicks.playerId, row.players.id))
     .limit(1);
 
-  return { player: row.players, team: row.teams, stats: stats ?? null, pick: pick ?? null };
+  return {
+    player: row.players,
+    team: row.teams,
+    stats,
+    statsHistory,
+    pick: pick ?? null,
+  };
 }

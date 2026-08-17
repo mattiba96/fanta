@@ -48,7 +48,7 @@ export default async function PlayerDetailPage({
   ]);
   if (!data) notFound();
 
-  const { player, team, stats, pick } = data;
+  const { player, team, stats, statsHistory, pick } = data;
   const [setPieces, lineupStatus, advice, news] = await Promise.all([
     getTeamSetPieces(team.id),
     getPlayerLineupStatus(player.id),
@@ -144,27 +144,40 @@ export default async function PlayerDetailPage({
         <Stat label="FVM (Mantra)" value={player.fvmMantra} />
       </div>
 
-      <h2 className="mt-8 mb-2 text-sm font-medium text-zinc-500">
-        Statistiche stagione 2025/26
-      </h2>
-      {stats ? (
-        <div className="grid grid-cols-3 gap-4 sm:grid-cols-6">
-          <Stat label="Partite" value={stats.pv} />
-          <Stat label="Media voto" value={stats.mv} />
-          <Stat label="Fantamedia" value={stats.fm} />
-          <Stat label="Gol" value={stats.goals} />
-          <Stat label="Assist" value={stats.assists} />
-          <Stat
-            label="Rigori"
-            value={
-              stats.penaltiesScored != null
-                ? `${stats.penaltiesScored}/${stats.penaltiesTaken ?? 0}`
-                : null
-            }
-          />
+      <h2 className="mt-8 mb-2 text-sm font-medium text-zinc-500">Statistiche</h2>
+      {statsHistory.length > 0 ? (
+        <div className="overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+          <table className="w-full text-sm">
+            <thead className="bg-zinc-100 text-left text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
+              <tr>
+                <th className="px-3 py-2 font-medium">Stagione</th>
+                <th className="px-3 py-2 font-medium">Partite</th>
+                <th className="px-3 py-2 font-medium">Media voto</th>
+                <th className="px-3 py-2 font-medium">Fantamedia</th>
+                <th className="px-3 py-2 font-medium">Gol</th>
+                <th className="px-3 py-2 font-medium">Assist</th>
+                <th className="px-3 py-2 font-medium">Rigori</th>
+              </tr>
+            </thead>
+            <tbody>
+              {statsHistory.map((s) => (
+                <tr key={s.season} className="border-t border-zinc-100 dark:border-zinc-800">
+                  <td className="px-3 py-2 font-medium">{s.season.replace("-", "/")}</td>
+                  <td className="px-3 py-2">{s.pv ?? "—"}</td>
+                  <td className="px-3 py-2">{s.mv ?? "—"}</td>
+                  <td className="px-3 py-2">{s.fm ?? "—"}</td>
+                  <td className="px-3 py-2">{s.goals ?? "—"}</td>
+                  <td className="px-3 py-2">{s.assists ?? "—"}</td>
+                  <td className="px-3 py-2">
+                    {s.penaltiesScored != null ? `${s.penaltiesScored}/${s.penaltiesTaken ?? 0}` : "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
-        <p className="text-zinc-400">Nessuna statistica disponibile per la stagione 2025/26.</p>
+        <p className="text-zinc-400">Nessuna statistica disponibile.</p>
       )}
 
       {setPieces.length > 0 && (
