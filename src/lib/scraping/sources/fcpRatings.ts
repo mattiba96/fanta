@@ -312,7 +312,16 @@ export async function getOrFetchComment(playerId: number): Promise<PlayerComment
 
   try {
     const cacheKey = `fcp-player-${playerId}`;
-    const { html } = await fetchHtml(existing.fcpUrl, { cacheKey, maxAgeMinutes: COMMENT_MAX_AGE_DAYS * 1440 });
+    // Fetch al volo dentro il rendering della scheda giocatore: timeout corto e
+    // nessun retry, altrimenti un sito lento blocca la pagina per decine di
+    // secondi (i valori pazienti di fetchHtml sono pensati per gli scraper in
+    // blocco, dove nessuno aspetta col caricamento fermo).
+    const { html } = await fetchHtml(existing.fcpUrl, {
+      cacheKey,
+      maxAgeMinutes: COMMENT_MAX_AGE_DAYS * 1440,
+      maxAttempts: 1,
+      timeoutMs: 4000,
+    });
     const parsed = parseIndividualPage(html);
 
     await db

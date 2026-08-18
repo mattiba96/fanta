@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getPlayerBySlug } from "@/lib/queries/players";
 import { getParticipantSummaries } from "@/lib/queries/participants";
@@ -7,13 +8,12 @@ import { getPlayerLineupStatus } from "@/lib/queries/lineups";
 import { getAdviceForPlayer } from "@/lib/queries/advice";
 import { getNewsForPlayer } from "@/lib/queries/news";
 import { getWatchlistEntryForPlayer } from "@/lib/queries/watchlist";
-import { getFcpRating } from "@/lib/queries/fcpRatings";
-import { getOrFetchComment } from "@/lib/scraping/sources/fcpRatings";
 import { getPlayerImageUrl } from "@/lib/playerImage";
 import { bandLabel } from "@/lib/advice/engine";
 import { RoleBadge } from "@/components/players/PlayersTable";
 import { QuickAssignControl } from "@/components/auction/QuickAssignControl";
 import { WatchlistControl } from "@/components/players/WatchlistControl";
+import { FcpSection, FcpSectionSkeleton } from "@/components/players/FcpSection";
 
 export const dynamic = "force-dynamic";
 
@@ -54,16 +54,13 @@ export default async function PlayerDetailPage({
   if (!data) notFound();
 
   const { player, team, stats, statsHistory, pick } = data;
-  const [setPieces, lineupStatus, advice, news, watchlistEntry, fcpRating] = await Promise.all([
+  const [setPieces, lineupStatus, advice, news, watchlistEntry] = await Promise.all([
     getTeamSetPieces(team.id),
     getPlayerLineupStatus(player.id),
     pick ? Promise.resolve(null) : getAdviceForPlayer(player.id),
     getNewsForPlayer(player.name),
     getWatchlistEntryForPlayer(player.id),
-    getFcpRating(player.id),
   ]);
-  const fcpComment = await getOrFetchComment(player.id);
-  const fcpTags = fcpRating?.tags ? fcpRating.tags.split(";").filter(Boolean) : [];
   const imageUrl = getPlayerImageUrl(player.externalId);
 
   return (
@@ -79,8 +76,8 @@ export default async function PlayerDetailPage({
             src={imageUrl}
             alt=""
             width={56}
-            height={56}
-            className="h-14 w-14 rounded-full border border-zinc-200 object-cover dark:border-zinc-800"
+            height={74}
+            className="h-[74px] w-14 rounded-md border border-zinc-200 object-contain dark:border-zinc-800"
           />
         )}
         <RoleBadge role={player.roleClassic} />
@@ -118,75 +115,9 @@ export default async function PlayerDetailPage({
         </div>
       )}
 
-      {(fcpRating || fcpComment) && (
-        <div className="mb-6 rounded-md border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="mb-3 text-xs text-zinc-500">FantaCalcioPedia</p>
-          <div className="mb-3 flex flex-wrap items-center gap-4">
-            {fcpRating?.algScore != null && (
-              <div>
-                <p className="text-xs text-zinc-500">Indice appetibilità</p>
-                <p className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-                  {fcpRating.algScore}
-                  <span className="text-sm font-normal text-zinc-400">/100</span>
-                </p>
-              </div>
-            )}
-            {fcpComment?.injuryResistance != null && (
-              <div>
-                <p className="text-xs text-zinc-500">Resistenza infortuni</p>
-                <p className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
-                  {fcpComment.injuryResistance}%
-                </p>
-              </div>
-            )}
-            {fcpComment?.investmentSolidity != null && (
-              <div>
-                <p className="text-xs text-zinc-500">Solidità investimento</p>
-                <p className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
-                  {fcpComment.investmentSolidity}%
-                </p>
-              </div>
-            )}
-          </div>
-          {fcpTags.length > 0 && (
-            <div className="mb-3 flex flex-wrap gap-2">
-              {fcpTags.map((tag, i) => (
-                <span
-                  key={i}
-                  className="rounded-full bg-indigo-50 px-2 py-1 text-xs text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-          )}
-          {(fcpComment?.predictedAppearances || fcpComment?.predictedGoals || fcpComment?.predictedAssists) && (
-            <div className="mb-3 flex flex-wrap gap-4 text-sm">
-              {fcpComment.predictedAppearances && (
-                <span className="text-zinc-600 dark:text-zinc-300">
-                  <span className="text-zinc-400">Presenze previste </span>
-                  {fcpComment.predictedAppearances[0]}-{fcpComment.predictedAppearances[1]}
-                </span>
-              )}
-              {fcpComment.predictedGoals && (
-                <span className="text-zinc-600 dark:text-zinc-300">
-                  <span className="text-zinc-400">Gol previsti </span>
-                  {fcpComment.predictedGoals[0]}-{fcpComment.predictedGoals[1]}
-                </span>
-              )}
-              {fcpComment.predictedAssists && (
-                <span className="text-zinc-600 dark:text-zinc-300">
-                  <span className="text-zinc-400">Assist previsti </span>
-                  {fcpComment.predictedAssists[0]}-{fcpComment.predictedAssists[1]}
-                </span>
-              )}
-            </div>
-          )}
-          {fcpComment?.comment && (
-            <p className="text-sm text-zinc-600 dark:text-zinc-300">{fcpComment.comment}</p>
-          )}
-        </div>
-      )}
+      <Suspense fallback={<FcpSectionSkeleton />}>
+        <FcpSection playerId={player.id} />
+      </Suspense>
 
       {advice && (
         <div className="mb-6 rounded-md border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">

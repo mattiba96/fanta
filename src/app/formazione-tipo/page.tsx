@@ -58,8 +58,8 @@ export default async function FormazioneTipoPage() {
                               src={img}
                               alt=""
                               width={20}
-                              height={20}
-                              className="h-5 w-5 shrink-0 rounded-full object-cover"
+                              height={27}
+                              className="h-7 w-5 shrink-0 rounded object-contain"
                             />
                           )}
                           <Link

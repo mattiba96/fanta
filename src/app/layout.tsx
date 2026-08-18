@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "FantAsta",
+  title: "Fantacucciolo",
   description: "Assistente personale per l'asta del fantacalcio",
 };
 

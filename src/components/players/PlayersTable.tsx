@@ -183,8 +183,8 @@ export function PlayersTable({
                         src={getPlayerImageUrl(p.externalId)!}
                         alt=""
                         width={24}
-                        height={24}
-                        className="h-6 w-6 shrink-0 rounded-full object-cover"
+                        height={32}
+                        className="h-8 w-6 shrink-0 rounded object-contain"
                       />
                     )}
                     {watchlistedIds?.has(p.id) && (

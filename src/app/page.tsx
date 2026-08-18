@@ -17,7 +17,7 @@ export default async function Home() {
     <div className="min-h-screen bg-zinc-50 p-6 font-sans dark:bg-black sm:p-10">
       <header className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-          FantAsta
+          Fantacucciolo
         </h1>
         <nav className="flex items-center gap-4 text-sm text-zinc-500 dark:text-zinc-400">
           <Link href="/consigli" className="hover:underline">

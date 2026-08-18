@@ -149,9 +149,9 @@ export function BrowsePlayers({
                 <img
                   src={getPlayerImageUrl(current.externalId)!}
                   alt=""
-                  width={80}
-                  height={80}
-                  className="mb-2 h-20 w-20 rounded-full border border-zinc-200 object-cover dark:border-zinc-800"
+                  width={90}
+                  height={120}
+                  className="mb-2 h-[120px] w-[90px] rounded-md border border-zinc-200 object-contain dark:border-zinc-800"
                 />
               )}
               <RoleBadge role={current.roleClassic} />
