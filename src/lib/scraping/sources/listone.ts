@@ -19,6 +19,7 @@ export type ParsedListingRow = {
   roleClassic: string; // P | D | C | A
   roleMantra: string | null;
   externalId: number | null;
+  profileUrl: string | null;
   quotInitialClassic: number | null;
   quotCurrentClassic: number | null;
   fvmClassic: number | null;
@@ -47,6 +48,7 @@ export function parseHtml(html: string): ParsedListingRow[] {
     const href = nameLink.attr("href") ?? "";
     const idMatch = href.match(/\/(\d+)\/?$/);
     const externalId = idMatch ? Number(idMatch[1]) : null;
+    const profileUrl = href || null;
 
     const cell = (key: string) =>
       $row.find(`td[data-col-key="${key}"]`).first().text().trim();
@@ -59,6 +61,7 @@ export function parseHtml(html: string): ParsedListingRow[] {
       roleClassic,
       roleMantra,
       externalId,
+      profileUrl,
       quotInitialClassic: parseItalianNumber(cell("c_qi")),
       quotCurrentClassic: parseItalianNumber(cell("c_qa")),
       fvmClassic: parseItalianNumber(cell("c_fvm")),
@@ -149,6 +152,7 @@ export async function run(opts: { force?: boolean } = {}): Promise<ListoneRunRes
             quotInitialMantra: action.row.quotInitialMantra,
             quotCurrentMantra: action.row.quotCurrentMantra,
             fvmMantra: action.row.fvmMantra,
+            sourceUrl: action.row.profileUrl,
             isActive: 1,
             updatedAt: now,
           })

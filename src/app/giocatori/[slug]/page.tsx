@@ -14,6 +14,7 @@ import { RoleBadge } from "@/components/players/PlayersTable";
 import { QuickAssignControl } from "@/components/auction/QuickAssignControl";
 import { WatchlistControl } from "@/components/players/WatchlistControl";
 import { FcpSection, FcpSectionSkeleton } from "@/components/players/FcpSection";
+import { DescriptionSection, DescriptionSectionSkeleton } from "@/components/players/DescriptionSection";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +115,10 @@ export default async function PlayerDetailPage({
           ))}
         </div>
       )}
+
+      <Suspense fallback={<DescriptionSectionSkeleton />}>
+        <DescriptionSection playerId={player.id} />
+      </Suspense>
 
       <Suspense fallback={<FcpSectionSkeleton />}>
         <FcpSection playerId={player.id} />

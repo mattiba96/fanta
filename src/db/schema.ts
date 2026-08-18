@@ -34,7 +34,11 @@ export const players = sqliteTable(
     fvmClassic: integer("fvm_classic"),
     fvmMantra: integer("fvm_mantra"),
     isActive: integer("is_active").notNull().default(1),
-    sourceUrl: text("source_url"),
+    sourceUrl: text("source_url"), // pagina profilo su fantacalcio.it, per la descrizione (fetch pigro)
+    generalDescription: text("general_description"), // paragrafo tattico/fisico, non sempre presente
+    proDescription: text("pro_description"),
+    contraDescription: text("contra_description"),
+    descriptionUpdatedAt: text("description_updated_at"),
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
