@@ -207,7 +207,13 @@ export const fcpRatings = sqliteTable(
     appealScore: integer("appeal_score"), // "Punteggio FantaCalcioPedia" (0-100), dalla pagina individuale
     injuryResistance: integer("injury_resistance"), // 0-100, dalla pagina individuale
     investmentSolidity: integer("investment_solidity"), // 0-100, dalla pagina individuale
-    comment: text("comment"), // ultimo box "Consigli asta {mese anno}"
+    comment: text("comment"), // paragrafo "SCHEDA FANTACALCIO": ruolo/stile di gioco, stabile nel tempo
+    predictedAppearancesMin: integer("predicted_appearances_min"),
+    predictedAppearancesMax: integer("predicted_appearances_max"),
+    predictedGoalsMin: integer("predicted_goals_min"),
+    predictedGoalsMax: integer("predicted_goals_max"),
+    predictedAssistsMin: integer("predicted_assists_min"),
+    predictedAssistsMax: integer("predicted_assists_max"),
     commentUpdatedAt: text("comment_updated_at"), // null finché non richiesta la pagina individuale
     updatedAt: text("updated_at").notNull(),
   },

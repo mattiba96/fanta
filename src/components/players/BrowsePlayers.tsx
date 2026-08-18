@@ -7,6 +7,7 @@ import type { ParticipantSummary } from "@/lib/queries/participants";
 import type { WatchlistMapEntry } from "@/lib/queries/watchlist";
 import { assignPlayer } from "@/actions/auction";
 import { RoleBadge } from "@/components/players/PlayersTable";
+import { getPlayerImageUrl } from "@/lib/playerImage";
 
 const ROLES = [
   { value: "P", label: "Portieri" },
@@ -143,6 +144,16 @@ export function BrowsePlayers({
             </button>
 
             <div className="flex flex-1 flex-col items-center gap-1 text-center">
+              {getPlayerImageUrl(current.externalId) && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={getPlayerImageUrl(current.externalId)!}
+                  alt=""
+                  width={80}
+                  height={80}
+                  className="mb-2 h-20 w-20 rounded-full border border-zinc-200 object-cover dark:border-zinc-800"
+                />
+              )}
               <RoleBadge role={current.roleClassic} />
               <h2 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
                 {current.name}

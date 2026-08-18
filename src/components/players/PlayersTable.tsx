@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { PlayerRow } from "@/lib/queries/players";
 import { QuickAssignControl, type ParticipantOption } from "@/components/auction/QuickAssignControl";
+import { getPlayerImageUrl } from "@/lib/playerImage";
 
 type SortKey = "quotCurrentClassic" | "fvmClassic" | "mv" | "fm" | "goals" | "assists";
 
@@ -175,14 +176,26 @@ export function PlayersTable({
                   <RoleBadge role={p.roleClassic} />
                 </td>
                 <td className="px-3 py-2 font-medium">
-                  {watchlistedIds?.has(p.id) && (
-                    <span className="mr-1 text-amber-500" title="Nei tuoi obiettivi">
-                      ★
-                    </span>
-                  )}
-                  <Link href={`/giocatori/${p.slug}`} className="hover:underline">
-                    {p.name}
-                  </Link>
+                  <div className="flex items-center gap-2">
+                    {getPlayerImageUrl(p.externalId) && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={getPlayerImageUrl(p.externalId)!}
+                        alt=""
+                        width={24}
+                        height={24}
+                        className="h-6 w-6 shrink-0 rounded-full object-cover"
+                      />
+                    )}
+                    {watchlistedIds?.has(p.id) && (
+                      <span className="text-amber-500" title="Nei tuoi obiettivi">
+                        ★
+                      </span>
+                    )}
+                    <Link href={`/giocatori/${p.slug}`} className="hover:underline">
+                      {p.name}
+                    </Link>
+                  </div>
                 </td>
                 <td className="px-3 py-2 text-zinc-500">{p.teamCode}</td>
                 <td className="px-3 py-2">{p.quotCurrentClassic ?? "—"}</td>

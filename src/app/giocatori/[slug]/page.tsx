@@ -9,6 +9,7 @@ import { getNewsForPlayer } from "@/lib/queries/news";
 import { getWatchlistEntryForPlayer } from "@/lib/queries/watchlist";
 import { getFcpRating } from "@/lib/queries/fcpRatings";
 import { getOrFetchComment } from "@/lib/scraping/sources/fcpRatings";
+import { getPlayerImageUrl } from "@/lib/playerImage";
 import { bandLabel } from "@/lib/advice/engine";
 import { RoleBadge } from "@/components/players/PlayersTable";
 import { QuickAssignControl } from "@/components/auction/QuickAssignControl";
@@ -63,6 +64,7 @@ export default async function PlayerDetailPage({
   ]);
   const fcpComment = await getOrFetchComment(player.id);
   const fcpTags = fcpRating?.tags ? fcpRating.tags.split(";").filter(Boolean) : [];
+  const imageUrl = getPlayerImageUrl(player.externalId);
 
   return (
     <div className="min-h-screen bg-zinc-50 p-6 font-sans dark:bg-black sm:p-10">
@@ -71,6 +73,16 @@ export default async function PlayerDetailPage({
       </Link>
 
       <header className="mt-4 mb-6 flex items-center gap-3">
+        {imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={imageUrl}
+            alt=""
+            width={56}
+            height={56}
+            className="h-14 w-14 rounded-full border border-zinc-200 object-cover dark:border-zinc-800"
+          />
+        )}
         <RoleBadge role={player.roleClassic} />
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
           {player.name}
@@ -146,6 +158,28 @@ export default async function PlayerDetailPage({
                   {tag}
                 </span>
               ))}
+            </div>
+          )}
+          {(fcpComment?.predictedAppearances || fcpComment?.predictedGoals || fcpComment?.predictedAssists) && (
+            <div className="mb-3 flex flex-wrap gap-4 text-sm">
+              {fcpComment.predictedAppearances && (
+                <span className="text-zinc-600 dark:text-zinc-300">
+                  <span className="text-zinc-400">Presenze previste </span>
+                  {fcpComment.predictedAppearances[0]}-{fcpComment.predictedAppearances[1]}
+                </span>
+              )}
+              {fcpComment.predictedGoals && (
+                <span className="text-zinc-600 dark:text-zinc-300">
+                  <span className="text-zinc-400">Gol previsti </span>
+                  {fcpComment.predictedGoals[0]}-{fcpComment.predictedGoals[1]}
+                </span>
+              )}
+              {fcpComment.predictedAssists && (
+                <span className="text-zinc-600 dark:text-zinc-300">
+                  <span className="text-zinc-400">Assist previsti </span>
+                  {fcpComment.predictedAssists[0]}-{fcpComment.predictedAssists[1]}
+                </span>
+              )}
             </div>
           )}
           {fcpComment?.comment && (

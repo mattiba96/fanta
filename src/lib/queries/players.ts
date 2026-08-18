@@ -15,6 +15,7 @@ export const SECONDARY_STATS_SEASON = "2024-25";
 export type PlayerRow = {
   id: number;
   slug: string;
+  externalId: string | null;
   name: string;
   teamCode: string;
   teamName: string;
@@ -43,6 +44,7 @@ export async function getAllPlayersFull(
     .select({
       id: players.id,
       slug: players.slug,
+      externalId: players.externalId,
       name: players.name,
       teamCode: teams.code,
       teamName: teams.name,

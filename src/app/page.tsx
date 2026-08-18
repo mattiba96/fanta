@@ -29,6 +29,9 @@ export default async function Home() {
           <Link href="/formazioni" className="hover:underline">
             Formazioni
           </Link>
+          <Link href="/formazione-tipo" className="hover:underline">
+            Formazione tipo
+          </Link>
           <Link href="/notizie" className="hover:underline">
             Notizie
           </Link>

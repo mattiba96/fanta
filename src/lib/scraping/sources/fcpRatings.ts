@@ -199,9 +199,17 @@ export type PlayerComment = {
   injuryResistance: number | null;
   investmentSolidity: number | null;
   comment: string | null;
+  predictedAppearances: [number, number] | null;
+  predictedGoals: [number, number] | null;
+  predictedAssists: [number, number] | null;
 };
 
-function parseIndividualPage(html: string): Omit<PlayerComment, never> {
+function extractRange(text: string, label: string): [number, number] | null {
+  const m = text.match(new RegExp(`${label}\\s*:?\\s*(\\d+)\\s*/\\s*(\\d+)`, "i"));
+  return m ? [Number(m[1]), Number(m[2])] : null;
+}
+
+function parseIndividualPage(html: string): PlayerComment {
   const $ = cheerio.load(html);
 
   let appealScore: number | null = null;
@@ -219,11 +227,37 @@ function parseIndividualPage(html: string): Omit<PlayerComment, never> {
       investmentSolidity = pct;
   });
 
-  // Il box #descr elenca i commenti in ordine dal più recente: prendiamo il primo <p>.
-  const firstParagraph = $("#descr").next(".mc_hookEvolution").find("p").first().text().trim();
-  const comment = firstParagraph || null;
+  // "SCHEDA FANTACALCIO" è la descrizione stabile di ruolo/stile di gioco:
+  // molto più utile fantacalcisticamente del box "Consigli asta {mese anno}"
+  // più recente, che spesso è solo cronaca di calciomercato (valore cartellino).
+  let comment: string | null = null;
+  $("#descr")
+    .next(".mc_hookEvolution")
+    .find("p")
+    .each((_, p) => {
+      const $p = $(p);
+      const label = $p.find("strong").first().text();
+      if (/scheda fantacalcio/i.test(label)) {
+        comment = $p.text().replace(label, "").replace(/^[:\s]+/, "").trim();
+      }
+    });
 
-  return { appealScore, injuryResistance, investmentSolidity, comment };
+  // Box "Riepilogo previsionali": testo semplice con <strong>Label:</strong> valore,
+  // non paragrafi — prendiamo il testo dell'intero contenitore e leggiamo i range.
+  const riepilogoHeading = $("h2.panel-title").filter((_, h) =>
+    /riepilogo previsionali/i.test($(h).text()),
+  );
+  const riepilogoText = riepilogoHeading.closest(".topmargin.font18").text();
+
+  return {
+    appealScore,
+    injuryResistance,
+    investmentSolidity,
+    comment,
+    predictedAppearances: extractRange(riepilogoText, "Presenze previste"),
+    predictedGoals: extractRange(riepilogoText, "Gol previsti"),
+    predictedAssists: extractRange(riepilogoText, "Assist previsti"),
+  };
 }
 
 /**
@@ -234,6 +268,37 @@ function parseIndividualPage(html: string): Omit<PlayerComment, never> {
  * Non lancia mai: un fallimento di rete ritorna i dati che c'erano (o null),
  * la scheda giocatore non deve rompersi per questo.
  */
+type FcpRatingRow = typeof fcpRatings.$inferSelect;
+
+function rowToComment(row: FcpRatingRow): PlayerComment {
+  const range = (min: number | null, max: number | null): [number, number] | null =>
+    min != null && max != null ? [min, max] : null;
+  return {
+    appealScore: row.appealScore,
+    injuryResistance: row.injuryResistance,
+    investmentSolidity: row.investmentSolidity,
+    comment: row.comment,
+    predictedAppearances: range(row.predictedAppearancesMin, row.predictedAppearancesMax),
+    predictedGoals: range(row.predictedGoalsMin, row.predictedGoalsMax),
+    predictedAssists: range(row.predictedAssistsMin, row.predictedAssistsMax),
+  };
+}
+
+function commentToUpdateValues(parsed: PlayerComment) {
+  return {
+    appealScore: parsed.appealScore,
+    injuryResistance: parsed.injuryResistance,
+    investmentSolidity: parsed.investmentSolidity,
+    comment: parsed.comment,
+    predictedAppearancesMin: parsed.predictedAppearances?.[0] ?? null,
+    predictedAppearancesMax: parsed.predictedAppearances?.[1] ?? null,
+    predictedGoalsMin: parsed.predictedGoals?.[0] ?? null,
+    predictedGoalsMax: parsed.predictedGoals?.[1] ?? null,
+    predictedAssistsMin: parsed.predictedAssists?.[0] ?? null,
+    predictedAssistsMax: parsed.predictedAssists?.[1] ?? null,
+  };
+}
+
 export async function getOrFetchComment(playerId: number): Promise<PlayerComment | null> {
   const [existing] = await db.select().from(fcpRatings).where(eq(fcpRatings.playerId, playerId)).limit(1);
   if (!existing?.fcpUrl) return null;
@@ -241,12 +306,7 @@ export async function getOrFetchComment(playerId: number): Promise<PlayerComment
   if (existing.commentUpdatedAt) {
     const ageDays = (Date.now() - new Date(existing.commentUpdatedAt).getTime()) / 86_400_000;
     if (ageDays < COMMENT_MAX_AGE_DAYS) {
-      return {
-        appealScore: existing.appealScore,
-        injuryResistance: existing.injuryResistance,
-        investmentSolidity: existing.investmentSolidity,
-        comment: existing.comment,
-      };
+      return rowToComment(existing);
     }
   }
 
@@ -257,7 +317,7 @@ export async function getOrFetchComment(playerId: number): Promise<PlayerComment
 
     await db
       .update(fcpRatings)
-      .set({ ...parsed, commentUpdatedAt: nowIso() })
+      .set({ ...commentToUpdateValues(parsed), commentUpdatedAt: nowIso() })
       .where(eq(fcpRatings.playerId, playerId));
 
     return parsed;
@@ -271,13 +331,6 @@ export async function getOrFetchComment(playerId: number): Promise<PlayerComment
         return null;
       }
     }
-    return existing.comment
-      ? {
-          appealScore: existing.appealScore,
-          injuryResistance: existing.injuryResistance,
-          investmentSolidity: existing.investmentSolidity,
-          comment: existing.comment,
-        }
-      : null;
+    return existing.comment ? rowToComment(existing) : null;
   }
 }
