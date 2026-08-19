@@ -1,98 +1,51 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import {
-  refreshStatistiche,
-  refreshListone,
-  refreshSetPieces,
-  refreshProbabiliFormazioni,
-  refreshNews,
-  refreshFcpRatings,
-  type RefreshOutcome,
-} from "@/actions/data";
+import { refreshAll, type RefreshAllStep } from "@/actions/data";
 
-type ButtonState = { pending: boolean; result: RefreshOutcome | null };
-
-function useRefreshButton(action: () => Promise<RefreshOutcome>) {
+export function UpdateDataButtons() {
   const [isPending, startTransition] = useTransition();
-  const [result, setResult] = useState<RefreshOutcome | null>(null);
+  const [report, setReport] = useState<RefreshAllStep[] | null>(null);
 
   const run = () => {
-    setResult(null);
+    setReport(null);
     startTransition(async () => {
-      const outcome = await action();
-      setResult(outcome);
+      const steps = await refreshAll();
+      setReport(steps);
     });
   };
 
-  const state: ButtonState = { pending: isPending, result };
-  return [state, run] as const;
-}
-
-export function UpdateDataButtons() {
-  const [statsState, runStats] = useRefreshButton(refreshStatistiche);
-  const [listoneState, runListone] = useRefreshButton(refreshListone);
-  const [setPiecesState, runSetPieces] = useRefreshButton(refreshSetPieces);
-  const [probabiliState, runProbabili] = useRefreshButton(refreshProbabiliFormazioni);
-  const [newsState, runNews] = useRefreshButton(refreshNews);
-  const [fcpState, runFcp] = useRefreshButton(refreshFcpRatings);
-
   return (
-    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:flex-wrap">
-      <RefreshButton
-        label="Aggiorna statistiche"
-        state={statsState}
-        onClick={runStats}
-      />
-      <RefreshButton
-        label="Aggiorna listone"
-        state={listoneState}
-        onClick={runListone}
-      />
-      <RefreshButton
-        label="Aggiorna rigoristi/tiratori"
-        state={setPiecesState}
-        onClick={runSetPieces}
-      />
-      <RefreshButton
-        label="Aggiorna probabili formazioni"
-        state={probabiliState}
-        onClick={runProbabili}
-      />
-      <RefreshButton label="Aggiorna notizie" state={newsState} onClick={runNews} />
-      <RefreshButton label="Aggiorna indice appetibilità" state={fcpState} onClick={runFcp} />
-    </div>
-  );
-}
-
-function RefreshButton({
-  label,
-  state,
-  onClick,
-}: {
-  label: string;
-  state: ButtonState;
-  onClick: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-1">
+    <div>
       <button
-        onClick={onClick}
-        disabled={state.pending}
-        className="rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-zinc-300"
+        onClick={run}
+        disabled={isPending}
+        className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
       >
-        {state.pending ? "Aggiornamento…" : label}
+        {isPending ? "Aggiornamento in corso… (qualche minuto)" : "Aggiorna tutto"}
       </button>
-      {state.result && (
-        <p
-          className={`max-w-xs text-xs ${
-            state.result.ok
-              ? "text-zinc-600 dark:text-zinc-400"
-              : "text-red-600 dark:text-red-400"
-          }`}
-        >
-          {state.result.message}
-        </p>
+
+      {report && (
+        <div className="mt-3 max-w-md rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="mb-2 text-xs font-medium text-zinc-500">Report aggiornamento</p>
+          <ul className="space-y-1.5">
+            {report.map((step, i) => (
+              <li key={i} className="text-sm">
+                <span
+                  className={
+                    step.outcome.ok
+                      ? "text-emerald-600 dark:text-emerald-400"
+                      : "text-red-600 dark:text-red-400"
+                  }
+                >
+                  {step.outcome.ok ? "✓" : "✕"}
+                </span>{" "}
+                <span className="font-medium text-zinc-900 dark:text-zinc-50">{step.label}:</span>{" "}
+                <span className="text-zinc-600 dark:text-zinc-400">{step.outcome.message}</span>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
     </div>
   );

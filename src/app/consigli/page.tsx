@@ -23,7 +23,7 @@ export default async function ConsigliPage() {
   const available = players.filter((p) => p.isAvailable && adviceMap.has(p.id));
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-6 font-sans dark:bg-black sm:p-10">
+    <div className="min-h-screen p-6 font-sans sm:p-10">
       <header className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
           Consigli

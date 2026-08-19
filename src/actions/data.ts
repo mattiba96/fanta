@@ -6,7 +6,9 @@ import * as listone from "@/lib/scraping/sources/listone";
 import * as setPieces from "@/lib/scraping/sources/setPieces";
 import * as probabiliFormazioni from "@/lib/scraping/sources/probabiliFormazioni";
 import * as news from "@/lib/scraping/sources/news";
+import * as fcNews from "@/lib/scraping/sources/fcNews";
 import * as fcpRatings from "@/lib/scraping/sources/fcpRatings";
+import * as playerDescription from "@/lib/scraping/sources/playerDescription";
 import { DEFAULT_STATS_SEASON } from "@/lib/queries/players";
 
 export type RefreshOutcome = {
@@ -78,6 +80,22 @@ export async function refreshNews(): Promise<RefreshOutcome> {
   }
 }
 
+export async function refreshFcNews(): Promise<RefreshOutcome> {
+  try {
+    const result = await fcNews.run();
+    revalidatePath("/notizie");
+    revalidatePath("/giocatori/[slug]", "page");
+    return {
+      ok: result.ok,
+      message: result.ok
+        ? `Notizie Fantacalcio.it: ${result.inserted} nuove, ${result.updated} aggiornate.`
+        : `Aggiornamento interrotto: solo ${result.articlesSeen} articoli trovati.`,
+    };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function refreshFcpRatings(): Promise<RefreshOutcome> {
   try {
     const result = await fcpRatings.run();
@@ -94,11 +112,39 @@ export async function refreshFcpRatings(): Promise<RefreshOutcome> {
   }
 }
 
+export async function refreshDescriptions(): Promise<RefreshOutcome> {
+  try {
+    const result = await playerDescription.run();
+    revalidatePath("/");
+    revalidatePath("/giocatori/[slug]", "page");
+    return {
+      ok: result.ok,
+      message: `Descrizioni: ${result.playersUpdated}/${result.playersSeen} aggiornate, ${result.playersFailed} fallite.`,
+    };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function refreshFcpComments(): Promise<RefreshOutcome> {
+  try {
+    const result = await fcpRatings.runComments();
+    revalidatePath("/");
+    revalidatePath("/giocatori/[slug]", "page");
+    return {
+      ok: result.ok,
+      message: `Commenti FantaCalcioPedia: ${result.playersUpdated}/${result.playersSeen} aggiornati, ${result.playersFailed} falliti.`,
+    };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export async function refreshProbabiliFormazioni(): Promise<RefreshOutcome> {
   try {
     const result = await probabiliFormazioni.run();
     revalidatePath("/");
-    revalidatePath("/formazioni");
+    revalidatePath("/formazione-tipo");
     revalidatePath("/giocatori/[slug]", "page");
     return {
       ok: result.ok,
@@ -109,4 +155,35 @@ export async function refreshProbabiliFormazioni(): Promise<RefreshOutcome> {
   } catch (err) {
     return { ok: false, message: err instanceof Error ? err.message : String(err) };
   }
+}
+
+export type RefreshAllStep = { label: string; outcome: RefreshOutcome };
+
+/**
+ * Un solo bottone che aggiorna tutto, nell'ordine giusto: prima le fonti
+ * "roster-authoritative" (listone/statistiche, possono creare giocatori),
+ * poi quelle di riferimento che devono abbinarsi a un roster già aggiornato
+ * (altrimenti troverebbero più nomi non riconosciuti del necessario).
+ * Ogni passo prosegue anche se uno fallisce, così un problema su una fonte
+ * non blocca l'aggiornamento delle altre.
+ */
+export async function refreshAll(): Promise<RefreshAllStep[]> {
+  const steps: Array<{ label: string; run: () => Promise<RefreshOutcome> }> = [
+    { label: "Listone quotazioni", run: refreshListone },
+    { label: "Statistiche", run: refreshStatistiche },
+    { label: "Rigoristi/tiratori", run: refreshSetPieces },
+    { label: "Probabili formazioni", run: refreshProbabiliFormazioni },
+    { label: "Indice appetibilità", run: refreshFcpRatings },
+    { label: "Commenti FantaCalcioPedia", run: refreshFcpComments },
+    { label: "Descrizioni fantacalcio.it", run: refreshDescriptions },
+    { label: "Notizie (SosFanta)", run: refreshNews },
+    { label: "Notizie (Fantacalcio.it)", run: refreshFcNews },
+  ];
+
+  const results: RefreshAllStep[] = [];
+  for (const step of steps) {
+    const outcome = await step.run();
+    results.push({ label: step.label, outcome });
+  }
+  return results;
 }

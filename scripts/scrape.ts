@@ -3,7 +3,9 @@ import * as listone from "@/lib/scraping/sources/listone";
 import * as setPieces from "@/lib/scraping/sources/setPieces";
 import * as probabiliFormazioni from "@/lib/scraping/sources/probabiliFormazioni";
 import * as news from "@/lib/scraping/sources/news";
+import * as fcNews from "@/lib/scraping/sources/fcNews";
 import * as fcpRatings from "@/lib/scraping/sources/fcpRatings";
+import * as playerDescription from "@/lib/scraping/sources/playerDescription";
 import { db } from "@/db/client";
 import { players } from "@/db/schema";
 import { eq, isNotNull, and } from "drizzle-orm";
@@ -43,14 +45,32 @@ async function main() {
       break;
     }
     case "news": {
-      console.log("Scraping notizie...");
+      console.log("Scraping notizie (SosFanta)...");
       const result = await news.run({ force });
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "fc-news": {
+      console.log("Scraping notizie (Fantacalcio.it)...");
+      const result = await fcNews.run({ force });
       console.log(JSON.stringify(result, null, 2));
       break;
     }
     case "fcp": {
       console.log("Scraping indice appetibilità (FantaCalcioPedia)...");
       const result = await fcpRatings.run({ force });
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "fcp-commenti": {
+      console.log("Backfill commenti individuali FantaCalcioPedia...");
+      const result = await fcpRatings.runComments({ force });
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "descrizioni": {
+      console.log("Backfill descrizioni/PRO-CONTRO da fantacalcio.it...");
+      const result = await playerDescription.run({ force });
       console.log(JSON.stringify(result, null, 2));
       break;
     }
@@ -73,7 +93,7 @@ async function main() {
     }
     default:
       console.error(
-        `Comando sconosciuto: "${command}".\nUso: npm run scrape -- <statistiche|listone|rigoristi|probabili|news|fcp|images> [--season=2025-26] [--force]`,
+        `Comando sconosciuto: "${command}".\nUso: npm run scrape -- <statistiche|listone|rigoristi|probabili|news|fc-news|fcp|fcp-commenti|descrizioni|images> [--season=2025-26] [--force]`,
       );
       process.exit(1);
   }

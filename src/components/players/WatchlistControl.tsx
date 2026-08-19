@@ -63,52 +63,62 @@ export function WatchlistControl({
   }
 
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-md border border-zinc-200 bg-white p-2 dark:border-zinc-800 dark:bg-zinc-900">
-      <label className="flex items-center gap-1 text-xs text-zinc-500">
-        Prezzo max
-        <input
-          type="number"
-          min={0}
-          value={targetPrice}
-          onChange={(e) => setTargetPrice(e.target.value)}
-          className="w-16 rounded border border-zinc-300 px-1 py-0.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-        />
-      </label>
-      <select
-        value={priority}
-        onChange={(e) => setPriority(e.target.value)}
-        className="rounded border border-zinc-300 px-1 py-0.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-      >
-        <option value="1">Priorità alta</option>
-        <option value="2">Priorità media</option>
-        <option value="3">Priorità bassa</option>
-      </select>
-      <input
-        type="text"
-        placeholder="Nota (opzionale)"
-        value={note}
-        onChange={(e) => setNote(e.target.value)}
-        className="min-w-[10rem] flex-1 rounded border border-zinc-300 px-2 py-0.5 text-sm dark:border-zinc-700 dark:bg-zinc-950"
-      />
-      <button
-        onClick={save}
-        disabled={isPending}
-        className="rounded bg-zinc-900 px-2 py-1 text-xs font-medium text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-      >
-        Salva
-      </button>
-      {initial && (
-        <button
-          onClick={remove}
-          disabled={isPending}
-          className="text-xs text-red-500 underline hover:text-red-600"
-        >
-          rimuovi
+    <div className="w-full max-w-sm rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+      <div className="mb-2 flex items-center justify-between">
+        <p className="text-xs font-medium text-zinc-500">Obiettivo</p>
+        <button onClick={() => setOpen(false)} className="text-sm text-zinc-400 hover:text-zinc-600">
+          ✕
         </button>
-      )}
-      <button onClick={() => setOpen(false)} className="text-xs text-zinc-400">
-        ✕
-      </button>
+      </div>
+
+      <div className="mb-2 flex flex-col gap-2">
+        <label className="flex items-center gap-2 text-xs text-zinc-500">
+          Prezzo max (opzionale)
+          <input
+            type="number"
+            min={0}
+            placeholder="facoltativo"
+            value={targetPrice}
+            onChange={(e) => setTargetPrice(e.target.value)}
+            className="w-20 rounded border border-zinc-300 px-1 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+          />
+        </label>
+        <select
+          value={priority}
+          onChange={(e) => setPriority(e.target.value)}
+          className="rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+        >
+          <option value="1">Priorità alta</option>
+          <option value="2">Priorità media</option>
+          <option value="3">Priorità bassa</option>
+        </select>
+        <input
+          type="text"
+          placeholder="Nota (opzionale)"
+          value={note}
+          onChange={(e) => setNote(e.target.value)}
+          className="rounded border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-950"
+        />
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          onClick={save}
+          disabled={isPending}
+          className="flex-1 rounded-md bg-brand px-3 py-2 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-50"
+        >
+          Salva
+        </button>
+        {initial && (
+          <button
+            onClick={remove}
+            disabled={isPending}
+            className="rounded-md border border-red-300 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-950/30"
+          >
+            Rimuovi
+          </button>
+        )}
+      </div>
     </div>
   );
 }

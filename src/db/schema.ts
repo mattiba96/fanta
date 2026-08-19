@@ -163,6 +163,16 @@ export const auctionSettings = sqliteTable("auction_settings", {
   participants: integer("participants").default(8),
   activeSeason: text("active_season"),
   statsSeason: text("stats_season"),
+  // Strategia d'asta dichiarata dall'utente in linguaggio libero (es. "punto
+  // tutto su 2 top attaccanti e risparmio in difesa", "priorità ai giovani in
+  // crescita"): il consiglio AI deve seguire questa, non solo l'indice di
+  // valore generico calcolato dal motore deterministico.
+  auctionStrategy: text("auction_strategy"),
+  // Ultimo consiglio AI generato automaticamente (ogni volta che un'assegnazione
+  // cambia, non solo su richiesta manuale) — persistito così resta visibile
+  // anche dopo un refresh/navigazione, senza dover rigenerarlo a comando.
+  lastAiAdvice: text("last_ai_advice"),
+  lastAiAdviceAt: text("last_ai_advice_at"),
   updatedAt: text("updated_at").notNull(),
 });
 
@@ -195,6 +205,23 @@ export const watchlist = sqliteTable("watchlist", {
   targetPrice: integer("target_price"),
   priority: integer("priority"),
   note: text("note"),
+});
+
+// Prezzi realmente pagati in aste passate dell'utente, importati da file
+// Excel/csv esterni una tantum (non uno scraping): servono da riferimento
+// concreto ("quanto ho pagato l'ultima volta questo giocatore") e per
+// calibrare il motore di consigli sui prezzi reali del proprio gruppo,
+// invece che solo sull'FVM ufficiale. playerId nullable: un nome non
+// riconosciuto va comunque conservato, non deve far fallire l'importazione.
+export const historicalAuctionPrices = sqliteTable("historical_auction_prices", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  playerId: integer("player_id").references(() => players.id, { onDelete: "cascade" }),
+  rawName: text("raw_name").notNull(),
+  role: text("role"),
+  price: integer("price").notNull(),
+  seasonLabel: text("season_label").notNull(),
+  sourceFile: text("source_file").notNull(),
+  createdAt: text("created_at").notNull(),
 });
 
 export const fcpRatings = sqliteTable(

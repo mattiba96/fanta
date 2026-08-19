@@ -1,26 +1,40 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: #f7faf8;
   --foreground: #171717;
+  /* Verde prato/pallone: colore identificativo dell'app, usato per bottoni
+     primari, nav attiva e accenti — al posto del bianco/nero neutro di prima. */
+  --brand: #16a34a;
+  --brand-hover: #15803d;
+  --brand-soft: #dcfce7;
+  --brand-soft-fg: #166534;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand: var(--brand);
+  --color-brand-hover: var(--brand-hover);
+  --color-brand-soft: var(--brand-soft);
+  --color-brand-soft-fg: var(--brand-soft-fg);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
+    --background: #0a0f0c;
     --foreground: #ededed;
+    --brand: #22c55e;
+    --brand-hover: #4ade80;
+    --brand-soft: rgba(34, 197, 94, 0.16);
+    --brand-soft-fg: #86efac;
   }
 }
 
 body {
-  background: var(--background);
+  background: radial-gradient(ellipse 1200px 600px at 50% -10%, var(--brand-soft) 0%, var(--background) 55%);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }

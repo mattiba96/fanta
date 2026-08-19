@@ -1,16 +1,19 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "@/db/client";
-import { players, teams, playerSeasonStats, auctionPicks, leagueParticipants } from "@/db/schema";
+import {
+  players,
+  teams,
+  playerSeasonStats,
+  auctionPicks,
+  leagueParticipants,
+  historicalAuctionPrices,
+  fcpRatings,
+} from "@/db/schema";
+import { getAdviceForAvailablePlayers } from "./advice";
+import type { Advice } from "@/lib/advice/engine";
+import { DEFAULT_STATS_SEASON, HISTORICAL_STATS_SEASONS } from "@/lib/seasons";
 
-// TODO(task #6 - gestione asta): leggere da auction_settings.statsSeason una volta
-// che le impostazioni sono configurabili; per ora la stagione di riferimento per
-// le statistiche pre-asta è fissa (l'unica stagione completa disponibile oggi).
-export const DEFAULT_STATS_SEASON = "2025-26";
-// Stagione aggiuntiva mostrata in scheda giocatore per dare un minimo di
-// storico oltre all'ultima stagione completa (richiesta esplicita: "le
-// statistiche di 2 anni di fantacalcio"). Non è la stagione di riferimento
-// per l'advice engine, solo contesto in più.
-export const SECONDARY_STATS_SEASON = "2024-25";
+export { DEFAULT_STATS_SEASON, HISTORICAL_STATS_SEASONS };
 
 export type PlayerRow = {
   id: number;
@@ -35,6 +38,8 @@ export type PlayerRow = {
   ownedByName: string | null;
   ownedByIsMe: boolean;
   pricePaid: number | null;
+  band: Advice["band"] | null;
+  fcpTags: string[];
 };
 
 export async function getAllPlayersFull(
@@ -63,6 +68,7 @@ export async function getAllPlayersFull(
       ownedByParticipantId: leagueParticipants.id,
       ownedByName: leagueParticipants.name,
       ownedByIsMe: leagueParticipants.isMe,
+      fcpTags: fcpRatings.tags,
     })
     .from(players)
     .innerJoin(teams, eq(teams.id, players.teamId))
@@ -75,12 +81,20 @@ export async function getAllPlayersFull(
     )
     .leftJoin(auctionPicks, eq(auctionPicks.playerId, players.id))
     .leftJoin(leagueParticipants, eq(leagueParticipants.id, auctionPicks.participantId))
+    .leftJoin(fcpRatings, eq(fcpRatings.playerId, players.id))
     .where(eq(players.isActive, 1));
+
+  // La fascia (band) è un percentile relativo al gruppo di ruolo tra i
+  // disponibili: va calcolata una volta sola su tutti i giocatori insieme
+  // (stesso motore usato in "Consigli"/scheda giocatore), non per riga.
+  const adviceByPlayer = await getAdviceForAvailablePlayers();
 
   return rows.map((r) => ({
     ...r,
     isAvailable: r.ownedByParticipantId == null,
     ownedByIsMe: r.ownedByIsMe === 1,
+    band: adviceByPlayer.get(r.id)?.band ?? null,
+    fcpTags: r.fcpTags ? r.fcpTags.split(";").filter(Boolean) : [],
   }));
 }
 
@@ -99,7 +113,7 @@ export async function getPlayerBySlug(slug: string) {
     .where(eq(playerSeasonStats.playerId, row.players.id));
   const statsBySeason = new Map(statsRows.map((s) => [s.season, s]));
   const stats = statsBySeason.get(DEFAULT_STATS_SEASON) ?? null;
-  const statsHistory = [DEFAULT_STATS_SEASON, SECONDARY_STATS_SEASON]
+  const statsHistory = [DEFAULT_STATS_SEASON, ...HISTORICAL_STATS_SEASONS]
     .map((season) => statsBySeason.get(season))
     .filter((s): s is NonNullable<typeof s> => s != null);
 
@@ -116,11 +130,17 @@ export async function getPlayerBySlug(slug: string) {
     .where(eq(auctionPicks.playerId, row.players.id))
     .limit(1);
 
+  const priceHistory = await db
+    .select({ seasonLabel: historicalAuctionPrices.seasonLabel, price: historicalAuctionPrices.price })
+    .from(historicalAuctionPrices)
+    .where(eq(historicalAuctionPrices.playerId, row.players.id));
+
   return {
     player: row.players,
     team: row.teams,
     stats,
     statsHistory,
     pick: pick ?? null,
+    priceHistory,
   };
 }

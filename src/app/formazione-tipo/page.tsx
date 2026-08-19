@@ -10,15 +10,15 @@ export default async function FormazioneTipoPage() {
   const teams = await getTypicalLineups();
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-6 font-sans dark:bg-black sm:p-10">
+    <div className="min-h-screen p-6 font-sans sm:p-10">
       <header className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
             Formazione tipo
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
-            Chi ci si aspetta giochi con continuità durante la stagione, non solo alla
-            prossima giornata.
+            Gli 11 titolari attesi per continuità durante la stagione secondo il modulo di
+            ogni squadra, con i ballottaggi per chi è vicino al posto da titolare.
           </p>
         </div>
         <Link href="/" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
@@ -41,8 +41,13 @@ export default async function FormazioneTipoPage() {
               key={team.teamId}
               className="rounded-md border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900"
             >
-              <h2 className="mb-3 font-medium text-zinc-900 dark:text-zinc-50">
+              <h2 className="mb-3 flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-50">
                 {team.teamName}
+                {team.formation && (
+                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-normal text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                    {team.formation}
+                  </span>
+                )}
               </h2>
               {(Object.keys(ROLE_LABELS) as Array<keyof typeof ROLE_LABELS>).map((role) => (
                 <div key={role} className="mb-2">
@@ -75,6 +80,19 @@ export default async function FormazioneTipoPage() {
                       <li className="text-sm text-zinc-400">—</li>
                     )}
                   </ul>
+                  {team.ballottaggi[role].length > 0 && (
+                    <p className="mt-1 text-xs text-amber-600 dark:text-amber-400">
+                      Ballottaggio:{" "}
+                      {team.ballottaggi[role].map((p, i) => (
+                        <span key={p.playerId}>
+                          {i > 0 && ", "}
+                          <Link href={`/giocatori/${p.slug}`} className="hover:underline">
+                            {p.name}
+                          </Link>
+                        </span>
+                      ))}
+                    </p>
+                  )}
                 </div>
               ))}
             </div>

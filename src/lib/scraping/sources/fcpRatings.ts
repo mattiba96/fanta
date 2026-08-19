@@ -299,6 +299,53 @@ function commentToUpdateValues(parsed: PlayerComment) {
   };
 }
 
+export type CommentsRunResult = {
+  ok: boolean;
+  playersSeen: number;
+  playersUpdated: number;
+  playersFailed: number;
+};
+
+/**
+ * Backfill in blocco dei commenti individuali. A differenza di getOrFetchComment
+ * (fetch al volo durante il rendering di una scheda, un solo tentativo e timeout
+ * corto per non bloccare la pagina), qui gira come job in background: si può
+ * permettere i retry pazienti di default di fetchHtml, ed è il modo giusto per
+ * recuperare i giocatori il cui tentativo lazy è fallito (commentUpdatedAt mai
+ * impostato) per via dei blocchi/reset di connessione intermittenti che
+ * fantacalciopedia.com applica a chi fa troppe richieste ravvicinate.
+ */
+export async function runComments(opts: { force?: boolean } = {}): Promise<CommentsRunResult> {
+  const rows = await db.select().from(fcpRatings);
+  let updated = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    if (!row.fcpUrl) continue;
+    if (!opts.force && row.commentUpdatedAt) {
+      const ageDays = (Date.now() - new Date(row.commentUpdatedAt).getTime()) / 86_400_000;
+      if (ageDays < COMMENT_MAX_AGE_DAYS) continue;
+    }
+    try {
+      const { html } = await fetchHtml(row.fcpUrl, {
+        cacheKey: `fcp-player-${row.playerId}`,
+        maxAgeMinutes: COMMENT_MAX_AGE_DAYS * 1440,
+        force: opts.force,
+      });
+      const parsed = parseIndividualPage(html);
+      await db
+        .update(fcpRatings)
+        .set({ ...commentToUpdateValues(parsed), commentUpdatedAt: nowIso() })
+        .where(eq(fcpRatings.playerId, row.playerId));
+      updated++;
+    } catch {
+      failed++;
+    }
+  }
+
+  return { ok: true, playersSeen: rows.length, playersUpdated: updated, playersFailed: failed };
+}
+
 export async function getOrFetchComment(playerId: number): Promise<PlayerComment | null> {
   const [existing] = await db.select().from(fcpRatings).where(eq(fcpRatings.playerId, playerId)).limit(1);
   if (!existing?.fcpUrl) return null;

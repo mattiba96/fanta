@@ -13,6 +13,14 @@ export type ParticipantSummary = {
   maxBid: number; // budget residuo meno 1 credito riservato per ogni slot ancora da riempire
   slotsFilled: Record<"P" | "D" | "C" | "A", number>;
   rosterCount: number;
+  totalSlots: number;
+  pctBudgetSpent: number; // 0-100
+  pctSlotsFilled: number; // 0-100
+  /** pctBudgetSpent - pctSlotsFilled: positivo = sta spendendo più in fretta
+   * di quanto stia riempiendo la rosa (rischia di restare senza budget per
+   * gli slot rimasti), negativo = procede con acquisti relativamente
+   * economici e ha margine per rilanciare più avanti nell'asta. */
+  spendPace: number;
 };
 
 async function ensureAtLeastOneParticipant() {
@@ -60,6 +68,9 @@ export async function getParticipantSummaries(): Promise<ParticipantSummary[]> {
     // residuo meno quella riserva.
     const maxBid = Math.max(0, budgetRemaining - Math.max(0, slotsRemaining - 1));
 
+    const pctBudgetSpent = settings.totalBudget > 0 ? Math.round((budgetSpent / settings.totalBudget) * 100) : 0;
+    const pctSlotsFilled = totalSlots > 0 ? Math.round((mine.length / totalSlots) * 100) : 0;
+
     return {
       id: p.id,
       name: p.name,
@@ -69,6 +80,10 @@ export async function getParticipantSummaries(): Promise<ParticipantSummary[]> {
       maxBid,
       slotsFilled,
       rosterCount: mine.length,
+      totalSlots,
+      pctBudgetSpent,
+      pctSlotsFilled,
+      spendPace: pctBudgetSpent - pctSlotsFilled,
     };
   });
 }
@@ -83,9 +98,69 @@ export async function getParticipantRoster(participantId: number) {
       roleClassic: players.roleClassic,
       price: auctionPicks.price,
       pickedAt: auctionPicks.pickedAt,
+      fvmClassic: players.fvmClassic,
+      quotCurrentClassic: players.quotCurrentClassic,
     })
     .from(auctionPicks)
     .innerJoin(players, eq(players.id, auctionPicks.playerId))
     .innerJoin(teams, eq(teams.id, players.teamId))
     .where(eq(auctionPicks.participantId, participantId));
+}
+
+export type ParticipantRosterEntry = Awaited<ReturnType<typeof getParticipantRoster>>[number];
+
+/** Rosa di TUTTI i partecipanti in un colpo solo (non solo la mia): serve per
+ * vedere durante l'asta chi ha preso chi, non solo budget/slot aggregati. */
+export async function getAllParticipantRosters(): Promise<Map<number, ParticipantRosterEntry[]>> {
+  const rows = await db
+    .select({
+      participantId: auctionPicks.participantId,
+      pickId: auctionPicks.id,
+      playerId: auctionPicks.playerId,
+      name: players.name,
+      teamCode: teams.code,
+      roleClassic: players.roleClassic,
+      price: auctionPicks.price,
+      pickedAt: auctionPicks.pickedAt,
+      fvmClassic: players.fvmClassic,
+      quotCurrentClassic: players.quotCurrentClassic,
+    })
+    .from(auctionPicks)
+    .innerJoin(players, eq(players.id, auctionPicks.playerId))
+    .innerJoin(teams, eq(teams.id, players.teamId))
+    .orderBy(asc(players.roleClassic), asc(players.name));
+
+  const byParticipant = new Map<number, ParticipantRosterEntry[]>();
+  for (const r of rows) {
+    const arr = byParticipant.get(r.participantId) ?? [];
+    arr.push(r);
+    byParticipant.set(r.participantId, arr);
+  }
+  return byParticipant;
+}
+
+export type RoleBudget = { role: "P" | "D" | "C" | "A"; spent: number; count: number; pct: number };
+
+/** Spesa per reparto (ruolo) di un partecipante, in crediti e in % sul suo
+ * budget totale — utile in asta per capire dove ha già impegnato i soldi e
+ * dove ha ancora margine. */
+export function budgetByRole(entries: ParticipantRosterEntry[], totalBudget: number): RoleBudget[] {
+  const roles: Array<"P" | "D" | "C" | "A"> = ["P", "D", "C", "A"];
+  const byRole = new Map<string, { spent: number; count: number }>();
+  for (const e of entries) {
+    if (!e.roleClassic) continue;
+    const cur = byRole.get(e.roleClassic) ?? { spent: 0, count: 0 };
+    cur.spent += e.price;
+    cur.count += 1;
+    byRole.set(e.roleClassic, cur);
+  }
+  return roles.map((role) => {
+    const cur = byRole.get(role) ?? { spent: 0, count: 0 };
+    return {
+      role,
+      spent: cur.spent,
+      count: cur.count,
+      pct: totalBudget > 0 ? Math.round((cur.spent / totalBudget) * 100) : 0,
+    };
+  });
 }

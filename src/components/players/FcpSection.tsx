@@ -81,9 +81,6 @@ export async function FcpSection({ playerId }: { playerId: number }) {
           )}
         </div>
       )}
-      {fcpComment?.comment && (
-        <p className="text-sm text-zinc-600 dark:text-zinc-300">{fcpComment.comment}</p>
-      )}
     </div>
   );
 }

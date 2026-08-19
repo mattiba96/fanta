@@ -15,6 +15,7 @@ import { QuickAssignControl } from "@/components/auction/QuickAssignControl";
 import { WatchlistControl } from "@/components/players/WatchlistControl";
 import { FcpSection, FcpSectionSkeleton } from "@/components/players/FcpSection";
 import { DescriptionSection, DescriptionSectionSkeleton } from "@/components/players/DescriptionSection";
+import { BackLink } from "@/components/BackLink";
 
 export const dynamic = "force-dynamic";
 
@@ -54,7 +55,7 @@ export default async function PlayerDetailPage({
   ]);
   if (!data) notFound();
 
-  const { player, team, stats, statsHistory, pick } = data;
+  const { player, team, stats, statsHistory, pick, priceHistory } = data;
   const [setPieces, lineupStatus, advice, news, watchlistEntry] = await Promise.all([
     getTeamSetPieces(team.id),
     getPlayerLineupStatus(player.id),
@@ -65,10 +66,8 @@ export default async function PlayerDetailPage({
   const imageUrl = getPlayerImageUrl(player.externalId);
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-6 font-sans dark:bg-black sm:p-10">
-      <Link href="/" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
-        ← Dashboard
-      </Link>
+    <div className="min-h-screen p-6 font-sans sm:p-10">
+      <BackLink fallbackHref="/" label="← Dashboard" />
 
       <header className="mt-4 mb-6 flex items-center gap-3">
         {imageUrl && (
@@ -93,6 +92,7 @@ export default async function PlayerDetailPage({
           playerId={player.id}
           roleClassic={player.roleClassic}
           isAvailable={!pick}
+          ownedByParticipantId={pick?.participantId ?? null}
           ownedByName={pick?.participantName ?? null}
           ownedByIsMe={pick?.participantIsMe === 1}
           pricePaid={pick?.price ?? null}
@@ -170,6 +170,27 @@ export default async function PlayerDetailPage({
         <Stat label="Quotazione (Mantra)" value={player.quotCurrentMantra} />
         <Stat label="FVM (Mantra)" value={player.fvmMantra} />
       </div>
+
+      {priceHistory.length > 0 && (
+        <div className="mt-4 rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
+          <p className="mb-2 text-xs font-medium text-zinc-500">
+            Quanto hai pagato questo giocatore nelle tue aste passate
+          </p>
+          <ul className="space-y-1">
+            {priceHistory
+              .slice()
+              .sort((a, b) => b.seasonLabel.localeCompare(a.seasonLabel))
+              .map((h, i) => (
+                <li key={i} className="flex items-center justify-between text-sm">
+                  <span className="text-zinc-500">Stagione {h.seasonLabel}</span>
+                  <span className="font-semibold text-zinc-900 dark:text-zinc-50">
+                    {h.price} {h.price === 1 ? "credito" : "crediti"}
+                  </span>
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
 
       <h2 className="mt-8 mb-2 text-sm font-medium text-zinc-500">Statistiche</h2>
       {statsHistory.length > 0 ? (

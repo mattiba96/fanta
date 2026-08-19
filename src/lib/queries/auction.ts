@@ -16,6 +16,9 @@ const DEFAULT_SETTINGS: Omit<AuctionSettings, "id" | "updatedAt"> = {
   participants: 8,
   activeSeason: "2026-27",
   statsSeason: "2025-26",
+  auctionStrategy: null,
+  lastAiAdvice: null,
+  lastAiAdviceAt: null,
 };
 
 export async function getAuctionSettings(): Promise<AuctionSettings> {
@@ -42,6 +45,9 @@ export type RosterEntry = {
   roleClassic: string | null;
   price: number;
   pickedAt: string;
+  fvmClassic: number | null;
+  /** (price - fvm) / fvm * 100: quanto ho pagato sopra/sotto l'FVM ufficiale. */
+  pctVsFvm: number | null;
 };
 
 export type AuctionState = {
@@ -52,6 +58,46 @@ export type AuctionState = {
   slotsTotal: Record<"P" | "D" | "C" | "A", number>;
   roster: RosterEntry[];
 };
+
+export type MarketInflation = {
+  /** % media (prezzo - fvm) / fvm sui picks con FVM noto: positivo = il
+   * mercato di questa asta sta pagando sopra le quotazioni ufficiali. */
+  overall: number | null;
+  byRole: Record<"P" | "D" | "C" | "A", number | null>;
+  picksConsidered: number;
+};
+
+/**
+ * Indice di inflazione del mercato dell'asta IN CORSO: confronta i prezzi
+ * realmente pagati da TUTTI i partecipanti (non solo i miei) con l'FVM
+ * ufficiale, per calibrare le prossime puntate sul prezzo che il gruppo sta
+ * davvero facendo, non su quello "di listino".
+ */
+export async function getMarketInflation(): Promise<MarketInflation> {
+  const rows = await db
+    .select({
+      price: auctionPicks.price,
+      roleSlot: auctionPicks.roleSlot,
+      fvmClassic: players.fvmClassic,
+    })
+    .from(auctionPicks)
+    .innerJoin(players, eq(players.id, auctionPicks.playerId));
+
+  const valid = rows.filter((r) => r.fvmClassic != null && r.fvmClassic > 0);
+  const pctOf = (r: (typeof valid)[number]) => ((r.price - r.fvmClassic!) / r.fvmClassic!) * 100;
+
+  const overall =
+    valid.length > 0 ? Math.round(valid.reduce((sum, r) => sum + pctOf(r), 0) / valid.length) : null;
+
+  const byRole: MarketInflation["byRole"] = { P: null, D: null, C: null, A: null };
+  for (const role of Object.keys(byRole) as Array<keyof typeof byRole>) {
+    const roleRows = valid.filter((r) => r.roleSlot === role);
+    byRole[role] =
+      roleRows.length > 0 ? Math.round(roleRows.reduce((sum, r) => sum + pctOf(r), 0) / roleRows.length) : null;
+  }
+
+  return { overall, byRole, picksConsidered: valid.length };
+}
 
 export async function getOrCreateMyParticipantId(): Promise<number> {
   const [me] = await db
@@ -72,7 +118,7 @@ export async function getAuctionState(): Promise<AuctionState> {
   const settings = await getAuctionSettings();
   const myParticipantId = await getOrCreateMyParticipantId();
 
-  const myPicks = await db
+  const myPicksRaw = await db
     .select({
       pickId: auctionPicks.id,
       playerId: auctionPicks.playerId,
@@ -81,12 +127,21 @@ export async function getAuctionState(): Promise<AuctionState> {
       roleClassic: players.roleClassic,
       price: auctionPicks.price,
       pickedAt: auctionPicks.pickedAt,
+      fvmClassic: players.fvmClassic,
     })
     .from(auctionPicks)
     .innerJoin(players, eq(players.id, auctionPicks.playerId))
     .innerJoin(teams, eq(teams.id, players.teamId))
     .where(eq(auctionPicks.participantId, myParticipantId))
     .orderBy(desc(auctionPicks.pickedAt));
+
+  const myPicks: RosterEntry[] = myPicksRaw.map((p) => ({
+    ...p,
+    pctVsFvm:
+      p.fvmClassic != null && p.fvmClassic > 0
+        ? Math.round(((p.price - p.fvmClassic) / p.fvmClassic) * 100)
+        : null,
+  }));
 
   const slotsFilled: AuctionState["slotsFilled"] = { P: 0, D: 0, C: 0, A: 0 };
   let budgetSpent = 0;

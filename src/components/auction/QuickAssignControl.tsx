@@ -10,6 +10,7 @@ export function QuickAssignControl({
   playerId,
   roleClassic,
   isAvailable,
+  ownedByParticipantId,
   ownedByName,
   ownedByIsMe,
   pricePaid,
@@ -18,6 +19,10 @@ export function QuickAssignControl({
   playerId: number;
   roleClassic: string | null;
   isAvailable: boolean;
+  /** Serve per "modifica prezzo": va rimandata l'assegnazione allo STESSO
+   * proprietario attuale, non a "me" di default. Opzionale per compatibilità
+   * con chi non lo passa ancora (in quel caso si può solo annullare). */
+  ownedByParticipantId?: number | null;
   ownedByName: string | null;
   ownedByIsMe: boolean;
   pricePaid: number | null;
@@ -25,6 +30,7 @@ export function QuickAssignControl({
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [editingPrice, setEditingPrice] = useState(false);
   const [price, setPrice] = useState("1");
   const me = participants.find((p) => p.isMe);
   const [participantId, setParticipantId] = useState<number | undefined>(
@@ -32,17 +38,18 @@ export function QuickAssignControl({
   );
   const [isPending, startTransition] = useTransition();
 
-  const doAssign = () => {
-    if (participantId == null) return;
-    const parsed = Number(price);
+  const doAssign = (targetParticipantId: number | undefined, priceValue: string) => {
+    if (targetParticipantId == null) return;
+    const parsed = Number(priceValue);
     startTransition(async () => {
       await assignPlayer({
         playerId,
-        participantId,
+        participantId: targetParticipantId,
         price: Number.isFinite(parsed) ? parsed : 0,
         roleSlot: roleClassic,
       });
       setOpen(false);
+      setEditingPrice(false);
       router.refresh();
     });
   };
@@ -55,11 +62,47 @@ export function QuickAssignControl({
   };
 
   if (!isAvailable) {
+    if (editingPrice) {
+      return (
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min={0}
+            autoFocus
+            value={price}
+            onChange={(e) => setPrice(e.target.value)}
+            className="w-14 rounded border border-zinc-300 px-1 py-0.5 text-xs dark:border-zinc-700 dark:bg-zinc-900"
+          />
+          <button
+            onClick={() => doAssign(ownedByParticipantId ?? undefined, price)}
+            disabled={isPending || ownedByParticipantId == null}
+            className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
+          >
+            OK
+          </button>
+          <button onClick={() => setEditingPrice(false)} className="text-xs text-zinc-400">
+            ✕
+          </button>
+        </div>
+      );
+    }
     return (
       <div className="flex items-center gap-2">
         <span className={ownedByIsMe ? "text-emerald-600" : "text-zinc-400"}>
           {ownedByIsMe ? "mio" : ownedByName} ({pricePaid})
         </span>
+        {ownedByParticipantId != null && (
+          <button
+            onClick={() => {
+              setPrice(String(pricePaid ?? 1));
+              setEditingPrice(true);
+            }}
+            disabled={isPending}
+            className="text-xs text-zinc-400 underline hover:text-zinc-600 disabled:opacity-50"
+          >
+            modifica prezzo
+          </button>
+        )}
         <button
           onClick={doUndo}
           disabled={isPending}
@@ -75,7 +118,7 @@ export function QuickAssignControl({
     return (
       <button
         onClick={() => setOpen(true)}
-        className="rounded bg-zinc-900 px-2 py-1 text-xs font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+        className="rounded bg-brand px-2 py-1 text-xs font-medium text-white hover:bg-brand-hover"
       >
         Segna
       </button>
@@ -103,7 +146,7 @@ export function QuickAssignControl({
         ))}
       </select>
       <button
-        onClick={doAssign}
+        onClick={() => doAssign(participantId, price)}
         disabled={isPending}
         className="rounded bg-emerald-600 px-2 py-1 text-xs font-medium text-white hover:bg-emerald-500 disabled:opacity-50"
       >

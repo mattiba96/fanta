@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getWatchlist } from "@/lib/queries/watchlist";
 import { RoleBadge } from "@/components/players/PlayersTable";
+import { RemoveWatchlistButton } from "@/components/players/RemoveWatchlistButton";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ export default async function ObiettiviPage() {
   const entries = await getWatchlist();
 
   return (
-    <div className="min-h-screen bg-zinc-50 p-6 font-sans dark:bg-black sm:p-10">
+    <div className="min-h-screen p-6 font-sans sm:p-10">
       <header className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
           I miei obiettivi
@@ -38,6 +39,7 @@ export default async function ObiettiviPage() {
                 <th className="px-3 py-2 font-medium">Prezzo max</th>
                 <th className="px-3 py-2 font-medium">Nota</th>
                 <th className="px-3 py-2 font-medium">Stato</th>
+                <th className="px-3 py-2 font-medium"></th>
               </tr>
             </thead>
             <tbody>
@@ -62,6 +64,9 @@ export default async function ObiettiviPage() {
                     ) : (
                       <span className="text-zinc-400">preso da {e.ownedByName}</span>
                     )}
+                  </td>
+                  <td className="px-3 py-2">
+                    <RemoveWatchlistButton playerId={e.playerId} />
                   </td>
                 </tr>
               ))}

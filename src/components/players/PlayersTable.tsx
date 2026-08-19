@@ -1,7 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { PlayerRow } from "@/lib/queries/players";
 import { QuickAssignControl, type ParticipantOption } from "@/components/auction/QuickAssignControl";
 import { getPlayerImageUrl } from "@/lib/playerImage";
@@ -16,6 +17,14 @@ const ROLES: { value: string; label: string }[] = [
   { value: "A", label: "Attaccante" },
 ];
 
+const BANDS: { value: string; label: string }[] = [
+  { value: "", label: "Tutte le fasce" },
+  { value: "top", label: "Top" },
+  { value: "semi-top", label: "Semi-top" },
+  { value: "centrale", label: "Centrale" },
+  { value: "scommessa", label: "Scommessa" },
+];
+
 export function PlayersTable({
   players,
   participants,
@@ -25,13 +34,43 @@ export function PlayersTable({
   participants: ParticipantOption[];
   watchlistedIds?: Set<number>;
 }) {
-  const [search, setSearch] = useState("");
-  const [role, setRole] = useState("");
-  const [team, setTeam] = useState("");
-  const [onlyAvailable, setOnlyAvailable] = useState(true);
-  const [sortKey, setSortKey] = useState<SortKey>("quotCurrentClassic");
-  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // I filtri partono da quanto già presente nell'URL: così tornando indietro
+  // (bottone del browser o link "← Dashboard", che ora usa router.back())
+  // la vista filtrata torna esattamente com'era, invece di azzerarsi.
+  const [search, setSearch] = useState(searchParams.get("q") ?? "");
+  const [role, setRole] = useState(searchParams.get("role") ?? "");
+  const [team, setTeam] = useState(searchParams.get("team") ?? "");
+  const [band, setBand] = useState(searchParams.get("band") ?? "");
+  const [specialty, setSpecialty] = useState(searchParams.get("tag") ?? "");
+  const [onlyAvailable, setOnlyAvailable] = useState(searchParams.get("avail") !== "0");
+  const [sortKey, setSortKey] = useState<SortKey>(
+    (searchParams.get("sort") as SortKey | null) ?? "quotCurrentClassic",
+  );
+  const [sortDir, setSortDir] = useState<"asc" | "desc">(
+    searchParams.get("dir") === "asc" ? "asc" : "desc",
+  );
   const [compareSlugs, setCompareSlugs] = useState<string[]>([]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (search) params.set("q", search);
+    if (role) params.set("role", role);
+    if (team) params.set("team", team);
+    if (band) params.set("band", band);
+    if (specialty) params.set("tag", specialty);
+    if (!onlyAvailable) params.set("avail", "0");
+    if (sortKey !== "quotCurrentClassic") params.set("sort", sortKey);
+    if (sortDir !== "desc") params.set("dir", sortDir);
+    const qs = params.toString();
+    // replace (non push): cambiare un filtro non deve riempire la cronologia
+    // di voci intermedie, altrimenti "indietro" dovrebbe essere premuto più volte.
+    router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, role, team, band, specialty, onlyAvailable, sortKey, sortDir]);
 
   const toggleCompare = (slug: string) => {
     setCompareSlugs((prev) =>
@@ -45,12 +84,20 @@ export function PlayersTable({
     return [...set.entries()].sort((a, b) => a[1].localeCompare(b[1]));
   }, [players]);
 
+  const specialtyOptions = useMemo(() => {
+    const set = new Set<string>();
+    for (const p of players) for (const tag of p.fcpTags) set.add(tag);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [players]);
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     let rows = players.filter((p) => {
       if (q && !p.name.toLowerCase().includes(q)) return false;
       if (role && p.roleClassic !== role) return false;
       if (team && p.teamCode !== team) return false;
+      if (band && p.band !== band) return false;
+      if (specialty && !p.fcpTags.includes(specialty)) return false;
       if (onlyAvailable && !p.isAvailable) return false;
       return true;
     });
@@ -63,7 +110,7 @@ export function PlayersTable({
     });
 
     return rows;
-  }, [players, search, role, team, onlyAvailable, sortKey, sortDir]);
+  }, [players, search, role, team, band, specialty, onlyAvailable, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -107,6 +154,29 @@ export function PlayersTable({
             </option>
           ))}
         </select>
+        <select
+          value={band}
+          onChange={(e) => setBand(e.target.value)}
+          className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          {BANDS.map((b) => (
+            <option key={b.value} value={b.value}>
+              {b.label}
+            </option>
+          ))}
+        </select>
+        <select
+          value={specialty}
+          onChange={(e) => setSpecialty(e.target.value)}
+          className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+        >
+          <option value="">Tutte le specialità</option>
+          {specialtyOptions.map((tag) => (
+            <option key={tag} value={tag}>
+              {tag}
+            </option>
+          ))}
+        </select>
         <label className="flex items-center gap-1.5 text-sm text-zinc-700 dark:text-zinc-300">
           <input
             type="checkbox"
@@ -126,7 +196,7 @@ export function PlayersTable({
           {compareSlugs.length >= 2 && (
             <Link
               href={`/confronto?${compareSlugs.map((s) => `p=${s}`).join("&")}`}
-              className="rounded-md bg-zinc-900 px-3 py-1 font-medium text-white hover:bg-zinc-700 dark:bg-zinc-100 dark:text-zinc-900"
+              className="rounded-md bg-brand px-3 py-1 font-medium text-white hover:bg-brand-hover"
             >
               Confronta →
             </Link>
@@ -209,6 +279,7 @@ export function PlayersTable({
                     playerId={p.id}
                     roleClassic={p.roleClassic}
                     isAvailable={p.isAvailable}
+                    ownedByParticipantId={p.ownedByParticipantId}
                     ownedByName={p.ownedByName}
                     ownedByIsMe={p.ownedByIsMe}
                     pricePaid={p.pricePaid}

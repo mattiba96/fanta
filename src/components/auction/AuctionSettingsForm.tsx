@@ -66,7 +66,7 @@ export function AuctionSettingsForm({ settings }: { settings: AuctionSettings })
       <button
         onClick={onSave}
         disabled={isPending}
-        className="rounded-md bg-zinc-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+        className="rounded-md bg-brand px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-50"
       >
         {isPending ? "Salvataggio…" : "Salva"}
       </button>

@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
 import { players, playerSeasonStats, setPieceRoles, lineupPlayers, auctionPicks } from "@/db/schema";
 import {
@@ -9,7 +9,8 @@ import {
   type SetPiecePriority,
   type LineupStatusInput,
 } from "@/lib/advice/engine";
-import { DEFAULT_STATS_SEASON } from "./players";
+import { DEFAULT_STATS_SEASON, HISTORICAL_STATS_SEASONS } from "@/lib/seasons";
+import { getAuctionSettings } from "./auction";
 
 /**
  * Consigli per tutti i giocatori ancora disponibili, raggruppati per ruolo
@@ -18,6 +19,7 @@ import { DEFAULT_STATS_SEASON } from "./players";
  * millisecondi, non serve altra ottimizzazione per un uso personale.
  */
 export async function getAdviceForAvailablePlayers(): Promise<Map<number, Advice>> {
+  const settings = await getAuctionSettings();
   const rows = await db
     .select({
       id: players.id,
@@ -42,6 +44,21 @@ export async function getAdviceForAvailablePlayers(): Promise<Map<number, Advice
     )
     .leftJoin(auctionPicks, eq(auctionPicks.playerId, players.id))
     .where(and(eq(players.isActive, 1), isNull(auctionPicks.id)));
+
+  const historicalRows = await db
+    .select({
+      playerId: playerSeasonStats.playerId,
+      fm: playerSeasonStats.fm,
+    })
+    .from(playerSeasonStats)
+    .where(inArray(playerSeasonStats.season, HISTORICAL_STATS_SEASONS));
+  const historicalFmByPlayer = new Map<number, number[]>();
+  for (const r of historicalRows) {
+    if (r.fm == null) continue;
+    const arr = historicalFmByPlayer.get(r.playerId) ?? [];
+    arr.push(r.fm);
+    historicalFmByPlayer.set(r.playerId, arr);
+  }
 
   const allSetPieces = await db.select().from(setPieceRoles);
   const setPieceByPlayer = new Map<number, SetPiecePriority>();
@@ -81,6 +98,7 @@ export async function getAdviceForAvailablePlayers(): Promise<Map<number, Advice
       redCards: r.redCards,
       setPiece: setPieceByPlayer.get(r.id) ?? {},
       lineupStatuses: lineupByPlayer.get(r.id) ?? [],
+      historicalFm: historicalFmByPlayer.get(r.id) ?? [],
     };
     const arr = byRole.get(role) ?? [];
     arr.push(input);
@@ -89,7 +107,7 @@ export async function getAdviceForAvailablePlayers(): Promise<Map<number, Advice
 
   const combined = new Map<number, Advice>();
   for (const [, inputs] of byRole) {
-    const adviceMap = buildAdviceForRoleGroup(inputs);
+    const adviceMap = buildAdviceForRoleGroup(inputs, settings.totalBudget);
     for (const [id, advice] of adviceMap) combined.set(id, advice);
   }
   return combined;

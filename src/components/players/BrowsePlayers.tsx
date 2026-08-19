@@ -97,7 +97,7 @@ export function BrowsePlayers({
             onClick={() => setRole(r.value)}
             className={`rounded-full px-3 py-1 text-sm font-medium ${
               role === r.value
-                ? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+                ? "bg-brand text-white"
                 : "bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300"
             }`}
           >

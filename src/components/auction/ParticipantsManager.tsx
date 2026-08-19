@@ -95,7 +95,7 @@ export function ParticipantsManager({ participants }: { participants: Participan
         <button
           onClick={onAdd}
           disabled={isPending}
-          className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-700 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
+          className="rounded-md bg-brand px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-hover disabled:opacity-50"
         >
           Aggiungi squadra
         </button>

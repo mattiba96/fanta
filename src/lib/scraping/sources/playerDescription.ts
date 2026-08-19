@@ -1,5 +1,5 @@
 import * as cheerio from "cheerio";
-import { eq } from "drizzle-orm";
+import { eq, and, isNotNull } from "drizzle-orm";
 import { fetchHtml, readCachedHtml } from "../http";
 import { nowIso } from "../normalize";
 import { db } from "@/db/client";
@@ -15,39 +15,24 @@ export type PlayerDescription = {
 
 /**
  * Funzione pura: HTML della pagina profilo fantacalcio.it -> descrizione.
- * Struttura osservata: dentro #player-description .card.tipography c'è
- * talvolta un paragrafo tattico/fisico libero, poi un <h2>"{Nome} in chiave
- * Fantacalcio"</h2> seguito da <li><strong>PRO</strong>: ...</li> e
- * <li><strong>CONTRO</strong>: ...</li>. Non tutti i giocatori hanno il
- * paragrafo iniziale (in quel caso l'h2 è il primo figlio del contenitore).
+ * Due sezioni distinte e indipendenti sulla stessa pagina:
+ * - `.description` (dentro una section.card a parte): paragrafo tattico/fisico
+ *   libero (stile/ruolo del giocatore), sempre presente. Prima si tentava di
+ *   ricavare un paragrafo simile dentro #player-description (il testo prima
+ *   dell'h2 "in chiave Fantacalcio"), ma lì l'h2 è sempre il primo figlio:
+ *   quella logica non ha mai prodotto nulla, la sezione giusta è questa.
+ * - `#player-description .card.tipography`: <h2>"{Nome} in chiave
+ *   Fantacalcio"</h2> seguito da <li><strong>PRO</strong>: ...</li> e
+ *   <li><strong>CONTRO</strong>: ...</li> — non tutti i giocatori la hanno.
  */
 export function parseDescriptionPage(html: string): PlayerDescription {
   const $ = cheerio.load(html);
-  const container = $("#player-description .card.tipography").first();
-  if (container.length === 0) {
-    return { generalDescription: null, proDescription: null, contraDescription: null };
-  }
 
-  const chiaveHeading = container
-    .find("h2")
-    .filter((_, h) => /in chiave fantacalcio/i.test($(h).text()))
-    .first();
-
-  let generalDescription: string | null = null;
-  if (chiaveHeading.length > 0) {
-    const before = chiaveHeading
-      .prevAll()
-      .map((_, el) => $(el).text().trim())
-      .get()
-      .filter(Boolean)
-      .reverse()
-      .join(" ")
-      .trim();
-    generalDescription = before || null;
-  }
+  const generalDescription = $(".description").first().text().trim() || null;
 
   let proDescription: string | null = null;
   let contraDescription: string | null = null;
+  const container = $("#player-description .card.tipography").first();
   container.find("li").each((_, li) => {
     const $li = $(li);
     const strongText = $li.find("strong").first().text();
@@ -68,6 +53,57 @@ function rowToDescription(row: PlayerRow): PlayerDescription {
     proDescription: row.proDescription,
     contraDescription: row.contraDescription,
   };
+}
+
+export type DescriptionRunResult = {
+  ok: boolean;
+  playersSeen: number;
+  playersUpdated: number;
+  playersFailed: number;
+};
+
+/**
+ * Backfill in blocco: girando come job in background può permettersi i retry
+ * pazienti di default di fetchHtml, a differenza di getOrFetchDescription (un
+ * solo tentativo, timeout corto, pensato per non bloccare il rendering di una
+ * scheda aperta dal vivo). Recupera anche i giocatori il cui unico tentativo
+ * lazy finora è fallito (descriptionUpdatedAt mai impostato).
+ */
+export async function run(opts: { force?: boolean } = {}): Promise<DescriptionRunResult> {
+  const rows = await db
+    .select({
+      id: players.id,
+      sourceUrl: players.sourceUrl,
+      descriptionUpdatedAt: players.descriptionUpdatedAt,
+    })
+    .from(players)
+    .where(and(eq(players.isActive, 1), isNotNull(players.sourceUrl)));
+
+  let updated = 0;
+  let failed = 0;
+  for (const row of rows) {
+    if (!opts.force && row.descriptionUpdatedAt) {
+      const ageDays = (Date.now() - new Date(row.descriptionUpdatedAt).getTime()) / 86_400_000;
+      if (ageDays < MAX_AGE_DAYS) continue;
+    }
+    try {
+      const { html } = await fetchHtml(row.sourceUrl!, {
+        cacheKey: `fc-profile-${row.id}`,
+        maxAgeMinutes: MAX_AGE_DAYS * 1440,
+        force: opts.force,
+      });
+      const parsed = parseDescriptionPage(html);
+      await db
+        .update(players)
+        .set({ ...parsed, descriptionUpdatedAt: nowIso() })
+        .where(eq(players.id, row.id));
+      updated++;
+    } catch {
+      failed++;
+    }
+  }
+
+  return { ok: true, playersSeen: rows.length, playersUpdated: updated, playersFailed: failed };
 }
 
 /**
