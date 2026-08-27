@@ -59,23 +59,34 @@ async function getLastOkRunAgeMinutes(source: string): Promise<number> {
  * della pagina che l'ha chiamata). Pensato per essere richiamato dal root
  * layout ad ogni navigazione — il controllo è una query indicizzata economica,
  * il refresh vero e proprio parte solo quando serve davvero.
+ *
+ * Le fonti vengono controllate IN SEQUENZA, non in parallelo: 8 query
+ * concorrenti sullo stesso client appena aperto (cold start serverless su
+ * Vercel) hanno causato errori intermittenti nel client libSQL. In sequenza
+ * costano comunque pochi millisecondi in totale (query indicizzate), e il
+ * try/catch attorno a OGNI fonte evita che il fallimento di una (query di
+ * freschezza o scraping vero e proprio) lasci una promise non gestita o
+ * blocchi il controllo delle altre.
  */
 export function triggerAutoRefreshIfStale(): void {
-  for (const source of Object.keys(THRESHOLDS_MINUTES)) {
-    if (inFlight.has(source)) continue;
+  void (async () => {
+    for (const source of Object.keys(THRESHOLDS_MINUTES)) {
+      if (inFlight.has(source)) continue;
 
-    void (async () => {
-      const ageMinutes = await getLastOkRunAgeMinutes(source);
-      if (ageMinutes < THRESHOLDS_MINUTES[source]) return;
-
-      inFlight.add(source);
       try {
-        await RUNNERS[source]();
+        const ageMinutes = await getLastOkRunAgeMinutes(source);
+        if (ageMinutes < THRESHOLDS_MINUTES[source]) continue;
+
+        inFlight.add(source);
+        try {
+          await RUNNERS[source]();
+        } finally {
+          inFlight.delete(source);
+        }
       } catch {
-        // L'errore è già registrato in scrape_runs dal modulo stesso.
-      } finally {
-        inFlight.delete(source);
+        // L'errore dello scraping è comunque già registrato in scrape_runs
+        // dal modulo stesso; qui basta non lasciare una rejection non gestita.
       }
-    })();
-  }
+    }
+  })();
 }
