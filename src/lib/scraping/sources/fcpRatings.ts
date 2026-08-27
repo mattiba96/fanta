@@ -119,18 +119,18 @@ export async function run(opts: { force?: boolean } = {}): Promise<FcpRatingsRun
     }
 
     const now = nowIso();
-    const counters = runWriteTransaction((tx) => {
+    const counters = await runWriteTransaction(async (tx) => {
       let inserted = 0;
       let unmatched = 0;
 
-      tx.delete(unmatchedNames).where(eq(unmatchedNames.source, "fcp_ratings")).run();
+      await tx.delete(unmatchedNames).where(eq(unmatchedNames.source, "fcp_ratings"));
 
       for (const action of actions) {
         if (action.kind === "skip_no_team") continue;
 
         if (action.kind === "unmatched") {
           unmatched++;
-          tx
+          await tx
             .insert(unmatchedNames)
             .values({
               source: "fcp_ratings",
@@ -142,12 +142,11 @@ export async function run(opts: { force?: boolean } = {}): Promise<FcpRatingsRun
             .onConflictDoUpdate({
               target: [unmatchedNames.source, unmatchedNames.rawName, unmatchedNames.teamId],
               set: { lastSeenAt: now },
-            })
-            .run();
+            });
           continue;
         }
 
-        tx
+        await tx
           .insert(fcpRatings)
           .values({
             playerId: action.playerId,
@@ -168,8 +167,7 @@ export async function run(opts: { force?: boolean } = {}): Promise<FcpRatingsRun
               tags: action.row.tags.join(";"),
               updatedAt: now,
             },
-          })
-          .run();
+          });
         inserted++;
       }
 

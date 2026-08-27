@@ -71,7 +71,7 @@ export async function run(opts: { force?: boolean } = {}): Promise<NewsRunResult
     }
 
     const now = nowIso();
-    const counters = runWriteTransaction((tx) => {
+    const counters = await runWriteTransaction(async (tx) => {
       let inserted = 0;
       let updated = 0;
       for (const a of articles) {
@@ -85,15 +85,14 @@ export async function run(opts: { force?: boolean } = {}): Promise<NewsRunResult
           publishedAt: a.publishedAt,
           fetchedAt: now,
         };
-        const result = tx
+        const result = await tx
           .insert(newsArticles)
           .values(values)
           .onConflictDoUpdate({
             target: newsArticles.url,
             set: { title: a.title, excerpt: a.excerpt, fetchedAt: now },
-          })
-          .run();
-        if (result.changes > 0 && result.lastInsertRowid) inserted++;
+          });
+        if (result.rowsAffected > 0 && result.lastInsertRowid) inserted++;
         else updated++;
       }
       return { rowsInserted: inserted, rowsUpdated: updated, rowsUnmatched: 0 };

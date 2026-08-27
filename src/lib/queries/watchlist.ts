@@ -1,6 +1,6 @@
 import { asc, eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { watchlist, players, teams, auctionPicks, leagueParticipants } from "@/db/schema";
+import { watchlist, players, teams } from "@/db/schema";
 
 export type WatchlistEntry = {
   playerId: number;
@@ -12,12 +12,10 @@ export type WatchlistEntry = {
   targetPrice: number | null;
   priority: number | null;
   note: string | null;
-  isAvailable: boolean;
-  ownedByName: string | null;
 };
 
 export async function getWatchlist(): Promise<WatchlistEntry[]> {
-  const rows = await db
+  return db
     .select({
       playerId: watchlist.playerId,
       name: players.name,
@@ -28,17 +26,11 @@ export async function getWatchlist(): Promise<WatchlistEntry[]> {
       targetPrice: watchlist.targetPrice,
       priority: watchlist.priority,
       note: watchlist.note,
-      ownedByParticipantId: auctionPicks.participantId,
-      ownedByName: leagueParticipants.name,
     })
     .from(watchlist)
     .innerJoin(players, eq(players.id, watchlist.playerId))
     .innerJoin(teams, eq(teams.id, players.teamId))
-    .leftJoin(auctionPicks, eq(auctionPicks.playerId, watchlist.playerId))
-    .leftJoin(leagueParticipants, eq(leagueParticipants.id, auctionPicks.participantId))
     .orderBy(asc(watchlist.priority));
-
-  return rows.map((r) => ({ ...r, isAvailable: r.ownedByParticipantId == null }));
 }
 
 export async function getWatchlistedPlayerIds(): Promise<Set<number>> {

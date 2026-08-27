@@ -7,11 +7,15 @@ import * as setPieces from "./sources/setPieces";
 import * as probabiliFormazioni from "./sources/probabiliFormazioni";
 import * as news from "./sources/news";
 import * as fcpRatings from "./sources/fcpRatings";
+import * as calendario from "./sources/calendario";
+import * as goalkeeperGrid from "./sources/goalkeeperGrid";
 import { DEFAULT_STATS_SEASON } from "@/lib/queries/players";
 
 // Soglie di "freschezza" per fonte: le notizie cambiano di continuo, le
 // formazioni/infortuni ogni giorno, quotazioni/statistiche/indice molto più
-// lentamente.
+// lentamente. Il calendario è il più lento da scaricare (38 pagine) e il più
+// stabile una volta pubblicato: soglia lunghissima, non deve mai bloccare una
+// navigazione qualunque con 60-90s di fetch in background.
 const THRESHOLDS_MINUTES: Record<string, number> = {
   news: 60, // 1 ora
   probabili: 180, // 3 ore
@@ -19,6 +23,8 @@ const THRESHOLDS_MINUTES: Record<string, number> = {
   listone: 1440,
   statistiche: 1440,
   fcp_ratings: 1440 * 7, // 7 giorni: l'indice/tag cambiano raramente
+  calendario: 1440 * 14, // 14 giorni
+  goalkeeper_grid: 1440 * 7, // 7 giorni: contenuto editoriale, aggiornato saltuariamente
 };
 
 const RUNNERS: Record<string, () => Promise<unknown>> = {
@@ -28,6 +34,8 @@ const RUNNERS: Record<string, () => Promise<unknown>> = {
   listone: () => listone.run(),
   statistiche: () => statistiche.run(DEFAULT_STATS_SEASON),
   fcp_ratings: () => fcpRatings.run(),
+  calendario: () => calendario.run(),
+  goalkeeper_grid: () => goalkeeperGrid.run(),
 };
 
 // Evita di far partire due refresh della stessa fonte in parallelo se più

@@ -49,11 +49,16 @@ export function parseHtml(html: string): ParsedListingRow[] {
     const idMatch = href.match(/\/(\d+)\/?$/);
     const externalId = idMatch ? Number(idMatch[1]) : null;
     const profileUrl = href || null;
+    // Il sito lascia in tabella (per riferimento storico) anche chi ha già
+    // lasciato la Serie A, marcato con questo span — se lo ignorassimo,
+    // giocatori trasferiti all'estero (es. Lukaku) resterebbero attivi
+    // all'infinito perché non spariscono mai dalle righe scaricate.
+    const isOutOfGame = $row.find("th.player-name .out-of-game").length > 0;
 
     const cell = (key: string) =>
       $row.find(`td[data-col-key="${key}"]`).first().text().trim();
 
-    if (!name || !Number.isFinite(teamExternalId)) return;
+    if (!name || !Number.isFinite(teamExternalId) || isOutOfGame) return;
 
     rows.push({
       name,
@@ -128,7 +133,7 @@ export async function run(opts: { force?: boolean } = {}): Promise<ListoneRunRes
 
     const now = nowIso();
     const seenPlayerIds = new Set<number>();
-    const counters = runWriteTransaction((tx) => {
+    const counters = await runWriteTransaction(async (tx) => {
       let inserted = 0;
       let updated = 0;
       let skipped = 0;
@@ -140,7 +145,7 @@ export async function run(opts: { force?: boolean } = {}): Promise<ListoneRunRes
         }
         seenPlayerIds.add(action.playerId);
 
-        tx
+        await tx
           .update(players)
           .set({
             teamId: action.teamId,
@@ -156,8 +161,7 @@ export async function run(opts: { force?: boolean } = {}): Promise<ListoneRunRes
             isActive: 1,
             updatedAt: now,
           })
-          .where(eq(players.id, action.playerId))
-          .run();
+          .where(eq(players.id, action.playerId));
 
         if (action.created) inserted++;
         else updated++;
@@ -167,11 +171,10 @@ export async function run(opts: { force?: boolean } = {}): Promise<ListoneRunRes
       // mai cancellati fisicamente per non rompere le FK su auction_picks/stats.
       const ids = [...seenPlayerIds];
       if (ids.length > 0) {
-        tx
+        await tx
           .update(players)
           .set({ isActive: 0, updatedAt: now })
-          .where(and(eq(players.isActive, 1), notInArray(players.id, ids)))
-          .run();
+          .where(and(eq(players.isActive, 1), notInArray(players.id, ids)));
       }
 
       return { rowsInserted: inserted, rowsUpdated: updated, rowsUnmatched: skipped };

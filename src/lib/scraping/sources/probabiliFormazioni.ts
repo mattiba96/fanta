@@ -280,14 +280,14 @@ export async function run(opts: { force?: boolean } = {}): Promise<ProbabiliRunR
     }
 
     const now = nowIso();
-    const counters = runWriteTransaction((tx) => {
+    const counters = await runWriteTransaction(async (tx) => {
       let inserted = 0;
       let unmatched = 0;
 
-      tx.delete(unmatchedNames).where(eq(unmatchedNames.source, "probabili")).run();
+      await tx.delete(unmatchedNames).where(eq(unmatchedNames.source, "probabili"));
 
       for (const match of resolved) {
-        const [fixtureRow] = tx
+        const [fixtureRow] = await tx
           .insert(fixtures)
           .values({
             season: SEASON,
@@ -303,13 +303,12 @@ export async function run(opts: { force?: boolean } = {}): Promise<ProbabiliRunR
             target: [fixtures.season, fixtures.matchday, fixtures.homeTeamId, fixtures.awayTeamId],
             set: { kickoffAt: match.kickoffAt, venue: match.venue, fetchedAt: now },
           })
-          .returning({ id: fixtures.id })
-          .all();
+          .returning({ id: fixtures.id });
 
         const fixtureId = fixtureRow.id;
 
         for (const teamLineup of [match.home, match.away]) {
-          const [lineupRow] = tx
+          const [lineupRow] = await tx
             .insert(teamLineups)
             .values({
               fixtureId,
@@ -321,14 +320,13 @@ export async function run(opts: { force?: boolean } = {}): Promise<ProbabiliRunR
               target: [teamLineups.fixtureId, teamLineups.teamId],
               set: { formation: teamLineup.formation, updatedAt: now },
             })
-            .returning({ id: teamLineups.id })
-            .all();
+            .returning({ id: teamLineups.id });
 
           const teamLineupId = lineupRow.id;
-          tx.delete(lineupPlayers).where(eq(lineupPlayers.teamLineupId, teamLineupId)).run();
+          await tx.delete(lineupPlayers).where(eq(lineupPlayers.teamLineupId, teamLineupId));
 
           for (const { row, playerId } of teamLineup.players) {
-            tx
+            await tx
               .insert(lineupPlayers)
               .values({
                 teamLineupId,
@@ -338,13 +336,12 @@ export async function run(opts: { force?: boolean } = {}): Promise<ProbabiliRunR
                 probability: row.probability,
                 note: row.note,
                 ballotGroup: row.ballotGroup,
-              })
-              .run();
+              });
             inserted++;
 
             if (!playerId) {
               unmatched++;
-              tx
+              await tx
                 .insert(unmatchedNames)
                 .values({
                   source: "probabili",
@@ -356,8 +353,7 @@ export async function run(opts: { force?: boolean } = {}): Promise<ProbabiliRunR
                 .onConflictDoUpdate({
                   target: [unmatchedNames.source, unmatchedNames.rawName, unmatchedNames.teamId],
                   set: { lastSeenAt: now },
-                })
-                .run();
+                });
             }
           }
         }

@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { PlayerRow } from "@/lib/queries/players";
-import { QuickAssignControl, type ParticipantOption } from "@/components/auction/QuickAssignControl";
 import { getPlayerImageUrl } from "@/lib/playerImage";
 
 type SortKey = "quotCurrentClassic" | "fvmClassic" | "mv" | "fm" | "goals" | "assists";
@@ -27,11 +26,9 @@ const BANDS: { value: string; label: string }[] = [
 
 export function PlayersTable({
   players,
-  participants,
   watchlistedIds,
 }: {
   players: PlayerRow[];
-  participants: ParticipantOption[];
   watchlistedIds?: Set<number>;
 }) {
   const router = useRouter();
@@ -46,7 +43,6 @@ export function PlayersTable({
   const [team, setTeam] = useState(searchParams.get("team") ?? "");
   const [band, setBand] = useState(searchParams.get("band") ?? "");
   const [specialty, setSpecialty] = useState(searchParams.get("tag") ?? "");
-  const [onlyAvailable, setOnlyAvailable] = useState(searchParams.get("avail") !== "0");
   const [sortKey, setSortKey] = useState<SortKey>(
     (searchParams.get("sort") as SortKey | null) ?? "quotCurrentClassic",
   );
@@ -62,7 +58,6 @@ export function PlayersTable({
     if (team) params.set("team", team);
     if (band) params.set("band", band);
     if (specialty) params.set("tag", specialty);
-    if (!onlyAvailable) params.set("avail", "0");
     if (sortKey !== "quotCurrentClassic") params.set("sort", sortKey);
     if (sortDir !== "desc") params.set("dir", sortDir);
     const qs = params.toString();
@@ -70,7 +65,7 @@ export function PlayersTable({
     // di voci intermedie, altrimenti "indietro" dovrebbe essere premuto più volte.
     router.replace(qs ? `${pathname}?${qs}` : pathname, { scroll: false });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [search, role, team, band, specialty, onlyAvailable, sortKey, sortDir]);
+  }, [search, role, team, band, specialty, sortKey, sortDir]);
 
   const toggleCompare = (slug: string) => {
     setCompareSlugs((prev) =>
@@ -98,7 +93,6 @@ export function PlayersTable({
       if (team && p.teamCode !== team) return false;
       if (band && p.band !== band) return false;
       if (specialty && !p.fcpTags.includes(specialty)) return false;
-      if (onlyAvailable && !p.isAvailable) return false;
       return true;
     });
 
@@ -110,7 +104,7 @@ export function PlayersTable({
     });
 
     return rows;
-  }, [players, search, role, team, band, specialty, onlyAvailable, sortKey, sortDir]);
+  }, [players, search, role, team, band, specialty, sortKey, sortDir]);
 
   const toggleSort = (key: SortKey) => {
     if (key === sortKey) {
@@ -177,14 +171,6 @@ export function PlayersTable({
             </option>
           ))}
         </select>
-        <label className="flex items-center gap-1.5 text-sm text-zinc-700 dark:text-zinc-300">
-          <input
-            type="checkbox"
-            checked={onlyAvailable}
-            onChange={(e) => setOnlyAvailable(e.target.checked)}
-          />
-          Solo disponibili
-        </label>
         <span className="ml-auto text-sm text-zinc-500">{filtered.length} giocatori</span>
       </div>
 
@@ -224,7 +210,6 @@ export function PlayersTable({
               <SortableHeader label="FM" sortKey="fm" current={sortKey} dir={sortDir} onClick={toggleSort} />
               <SortableHeader label="Gol" sortKey="goals" current={sortKey} dir={sortDir} onClick={toggleSort} />
               <SortableHeader label="Ass." sortKey="assists" current={sortKey} dir={sortDir} onClick={toggleSort} />
-              <th className="px-3 py-2 font-medium">Stato</th>
             </tr>
           </thead>
           <tbody>
@@ -274,23 +259,11 @@ export function PlayersTable({
                 <td className="px-3 py-2">{p.fm?.toFixed(2) ?? "—"}</td>
                 <td className="px-3 py-2">{p.goals ?? "—"}</td>
                 <td className="px-3 py-2">{p.assists ?? "—"}</td>
-                <td className="px-3 py-2">
-                  <QuickAssignControl
-                    playerId={p.id}
-                    roleClassic={p.roleClassic}
-                    isAvailable={p.isAvailable}
-                    ownedByParticipantId={p.ownedByParticipantId}
-                    ownedByName={p.ownedByName}
-                    ownedByIsMe={p.ownedByIsMe}
-                    pricePaid={p.pricePaid}
-                    participants={participants}
-                  />
-                </td>
               </tr>
             ))}
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-3 py-6 text-center text-zinc-400">
+                <td colSpan={10} className="px-3 py-6 text-center text-zinc-400">
                   Nessun giocatore trovato. Prova ad aggiornare i dati dalla pagina Impostazioni.
                 </td>
               </tr>

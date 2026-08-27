@@ -5,6 +5,8 @@ import * as statistiche from "@/lib/scraping/sources/statistiche";
 import * as listone from "@/lib/scraping/sources/listone";
 import * as setPieces from "@/lib/scraping/sources/setPieces";
 import * as probabiliFormazioni from "@/lib/scraping/sources/probabiliFormazioni";
+import * as calendario from "@/lib/scraping/sources/calendario";
+import * as goalkeeperGrid from "@/lib/scraping/sources/goalkeeperGrid";
 import * as news from "@/lib/scraping/sources/news";
 import * as fcNews from "@/lib/scraping/sources/fcNews";
 import * as fcpRatings from "@/lib/scraping/sources/fcpRatings";
@@ -157,6 +159,36 @@ export async function refreshProbabiliFormazioni(): Promise<RefreshOutcome> {
   }
 }
 
+export async function refreshGoalkeeperGrid(): Promise<RefreshOutcome> {
+  try {
+    const result = await goalkeeperGrid.run();
+    revalidatePath("/griglie");
+    return {
+      ok: result.ok,
+      message: result.ok
+        ? `Griglia portieri: ${result.rowsInserted} righe salvate, ${result.rowsUnmatched} non abbinate.`
+        : `Aggiornamento interrotto: solo ${result.rowsSeen} righe trovate.`,
+    };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+export async function refreshCalendario(): Promise<RefreshOutcome> {
+  try {
+    const result = await calendario.run();
+    revalidatePath("/griglie");
+    return {
+      ok: result.ok,
+      message: result.ok
+        ? `Calendario: ${result.rowsInserted} partite salvate, ${result.rowsUnmatched} non abbinate.`
+        : `Aggiornamento interrotto: solo ${result.rowsSeen} partite trovate.`,
+    };
+  } catch (err) {
+    return { ok: false, message: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 export type RefreshAllStep = { label: string; outcome: RefreshOutcome };
 
 /**
@@ -166,6 +198,10 @@ export type RefreshAllStep = { label: string; outcome: RefreshOutcome };
  * (altrimenti troverebbero più nomi non riconosciuti del necessario).
  * Ogni passo prosegue anche se uno fallisce, così un problema su una fonte
  * non blocca l'aggiornamento delle altre.
+ *
+ * Il calendario NON è incluso qui di proposito: scarica 38 pagine (60-90s)
+ * per un dato che cambia raramente una volta pubblicato, quindi ha un suo
+ * bottone separato invece di rallentare "Aggiorna tutto" ad ogni click.
  */
 export async function refreshAll(): Promise<RefreshAllStep[]> {
   const steps: Array<{ label: string; run: () => Promise<RefreshOutcome> }> = [
@@ -178,6 +214,7 @@ export async function refreshAll(): Promise<RefreshAllStep[]> {
     { label: "Descrizioni fantacalcio.it", run: refreshDescriptions },
     { label: "Notizie (SosFanta)", run: refreshNews },
     { label: "Notizie (Fantacalcio.it)", run: refreshFcNews },
+    { label: "Griglia portieri (SOS Fanta)", run: refreshGoalkeeperGrid },
   ];
 
   const results: RefreshAllStep[] = [];

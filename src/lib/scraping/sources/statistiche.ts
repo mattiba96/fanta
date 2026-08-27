@@ -182,13 +182,13 @@ export async function run(
     }
 
     const now = nowIso();
-    const counters = runWriteTransaction((tx) => {
+    const counters = await runWriteTransaction(async (tx) => {
       let inserted = 0;
       let updated = 0;
       let skipped = 0;
 
       if (!allowCreate) {
-        tx.delete(unmatchedNames).where(eq(unmatchedNames.source, "statistiche")).run();
+        await tx.delete(unmatchedNames).where(eq(unmatchedNames.source, "statistiche"));
       }
 
       for (const action of actions) {
@@ -199,7 +199,7 @@ export async function run(
 
         if (action.kind === "unmatched") {
           skipped++;
-          tx
+          await tx
             .insert(unmatchedNames)
             .values({
               source: "statistiche",
@@ -211,8 +211,7 @@ export async function run(
             .onConflictDoUpdate({
               target: [unmatchedNames.source, unmatchedNames.rawName, unmatchedNames.teamId],
               set: { lastSeenAt: now },
-            })
-            .run();
+            });
           continue;
         }
 
@@ -233,14 +232,13 @@ export async function run(
           updatedAt: now,
         };
 
-        tx
+        await tx
           .insert(playerSeasonStats)
           .values(values)
           .onConflictDoUpdate({
             target: [playerSeasonStats.playerId, playerSeasonStats.season],
             set: values,
-          })
-          .run();
+          });
 
         if (action.created) inserted++;
         else updated++;

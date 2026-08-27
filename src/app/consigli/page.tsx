@@ -20,13 +20,13 @@ export default async function ConsigliPage() {
     getAdviceForAvailablePlayers(),
   ]);
 
-  const available = players.filter((p) => p.isAvailable && adviceMap.has(p.id));
+  const available = players.filter((p) => adviceMap.has(p.id));
 
   return (
     <div className="min-h-screen p-6 font-sans sm:p-10">
       <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-          Consigli
+        <h1 className="flex items-center gap-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+          <span aria-hidden>💡</span> Consigli
         </h1>
         <Link href="/" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
           ← Dashboard
@@ -35,7 +35,7 @@ export default async function ConsigliPage() {
       <p className="mb-6 max-w-2xl text-sm text-zinc-500">
         Indice calcolato su convenienza (fantamedia per credito speso rispetto agli altri
         giocatori dello stesso ruolo), titolarità attesa e affidabilità (presenze la scorsa
-        stagione). Solo giocatori ancora disponibili.
+        stagione).
       </p>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -74,7 +74,7 @@ export default async function ConsigliPage() {
                         </td>
                         <td className="px-3 py-2">{player.quotCurrentClassic ?? "—"}</td>
                         <td className="px-3 py-2">{bandLabel(advice.band)}</td>
-                        <td className="px-3 py-2 font-semibold text-zinc-900 dark:text-zinc-50">
+                        <td className="px-3 py-2 font-semibold text-brand">
                           {advice.score}
                         </td>
                         <td className="px-3 py-2">{advice.suggestedPrice ?? "—"}</td>

@@ -1,6 +1,6 @@
 import { eq, and, inArray, asc } from "drizzle-orm";
 import { db } from "@/db/client";
-import { teams, players, playerSeasonStats, auctionPicks, leagueParticipants } from "@/db/schema";
+import { teams, players, playerSeasonStats } from "@/db/schema";
 import { getAdviceForAvailablePlayers } from "./advice";
 import { getLatestFormationByTeam } from "./formations";
 import { DEFAULT_STATS_SEASON, HISTORICAL_STATS_SEASONS } from "./players";
@@ -45,9 +45,6 @@ export type TeamRosterPlayer = {
   fm: number | null;
   advice: Advice | null;
   recommendation: "consigliato" | "da_evitare" | null;
-  ownedByName: string | null;
-  ownedByIsMe: boolean;
-  pricePaid: number | null;
 };
 
 export type TeamDetail = TeamBasic & {
@@ -103,17 +100,12 @@ export async function getTeamBySlug(slug: string): Promise<TeamDetail | null> {
         pv: playerSeasonStats.pv,
         mv: playerSeasonStats.mv,
         fm: playerSeasonStats.fm,
-        pricePaid: auctionPicks.price,
-        ownedByName: leagueParticipants.name,
-        ownedByIsMe: leagueParticipants.isMe,
       })
       .from(players)
       .leftJoin(
         playerSeasonStats,
         and(eq(playerSeasonStats.playerId, players.id), eq(playerSeasonStats.season, DEFAULT_STATS_SEASON)),
       )
-      .leftJoin(auctionPicks, eq(auctionPicks.playerId, players.id))
-      .leftJoin(leagueParticipants, eq(leagueParticipants.id, auctionPicks.participantId))
       .where(and(eq(players.teamId, team.id), eq(players.isActive, 1))),
     getAdviceForAvailablePlayers(),
     getLatestFormationByTeam(),
@@ -160,9 +152,6 @@ export async function getTeamBySlug(slug: string): Promise<TeamDetail | null> {
       fm: r.fm,
       advice,
       recommendation: classifyRecommendation(advice),
-      ownedByName: r.ownedByName,
-      ownedByIsMe: r.ownedByIsMe === 1,
-      pricePaid: r.pricePaid,
     });
   }
   for (const role of Object.keys(byRole) as Array<keyof TeamDetail["byRole"]>) {

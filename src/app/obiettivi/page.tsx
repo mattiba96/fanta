@@ -13,8 +13,8 @@ export default async function ObiettiviPage() {
   return (
     <div className="min-h-screen p-6 font-sans sm:p-10">
       <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-          I miei obiettivi
+        <h1 className="flex items-center gap-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+          <span aria-hidden>⭐</span> I miei obiettivi
         </h1>
         <Link href="/" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
           ← Dashboard
@@ -38,7 +38,6 @@ export default async function ObiettiviPage() {
                 <th className="px-3 py-2 font-medium">Qt.A</th>
                 <th className="px-3 py-2 font-medium">Prezzo max</th>
                 <th className="px-3 py-2 font-medium">Nota</th>
-                <th className="px-3 py-2 font-medium">Stato</th>
                 <th className="px-3 py-2 font-medium"></th>
               </tr>
             </thead>
@@ -58,13 +57,6 @@ export default async function ObiettiviPage() {
                   <td className="px-3 py-2">{e.quotCurrentClassic ?? "—"}</td>
                   <td className="px-3 py-2 font-semibold">{e.targetPrice ?? "—"}</td>
                   <td className="px-3 py-2 text-zinc-500">{e.note ?? "—"}</td>
-                  <td className="px-3 py-2">
-                    {e.isAvailable ? (
-                      <span className="text-emerald-600 dark:text-emerald-400">disponibile</span>
-                    ) : (
-                      <span className="text-zinc-400">preso da {e.ownedByName}</span>
-                    )}
-                  </td>
                   <td className="px-3 py-2">
                     <RemoveWatchlistButton playerId={e.playerId} />
                   </td>

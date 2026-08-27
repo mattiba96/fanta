@@ -2,6 +2,8 @@ import * as statistiche from "@/lib/scraping/sources/statistiche";
 import * as listone from "@/lib/scraping/sources/listone";
 import * as setPieces from "@/lib/scraping/sources/setPieces";
 import * as probabiliFormazioni from "@/lib/scraping/sources/probabiliFormazioni";
+import * as calendario from "@/lib/scraping/sources/calendario";
+import * as goalkeeperGrid from "@/lib/scraping/sources/goalkeeperGrid";
 import * as news from "@/lib/scraping/sources/news";
 import * as fcNews from "@/lib/scraping/sources/fcNews";
 import * as fcpRatings from "@/lib/scraping/sources/fcpRatings";
@@ -41,6 +43,18 @@ async function main() {
     case "probabili": {
       console.log("Scraping probabili formazioni...");
       const result = await probabiliFormazioni.run({ force });
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "calendario": {
+      console.log("Scraping calendario Serie A (38 giornate)...");
+      const result = await calendario.run({ force });
+      console.log(JSON.stringify(result, null, 2));
+      break;
+    }
+    case "griglia-portieri": {
+      console.log("Scraping griglia portieri (SOS Fanta)...");
+      const result = await goalkeeperGrid.run({ force });
       console.log(JSON.stringify(result, null, 2));
       break;
     }
@@ -93,7 +107,7 @@ async function main() {
     }
     default:
       console.error(
-        `Comando sconosciuto: "${command}".\nUso: npm run scrape -- <statistiche|listone|rigoristi|probabili|news|fc-news|fcp|fcp-commenti|descrizioni|images> [--season=2025-26] [--force]`,
+        `Comando sconosciuto: "${command}".\nUso: npm run scrape -- <statistiche|listone|rigoristi|probabili|calendario|griglia-portieri|news|fc-news|fcp|fcp-commenti|descrizioni|images> [--season=2025-26] [--force]`,
       );
       process.exit(1);
   }

@@ -3,26 +3,17 @@ import { db } from "@/db/client";
 import { scrapeRuns } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { UpdateDataButtons } from "@/components/data/UpdateDataButtons";
-import { AuctionSettingsForm } from "@/components/auction/AuctionSettingsForm";
-import { ParticipantsManager } from "@/components/auction/ParticipantsManager";
-import { BackupControls } from "@/components/auction/BackupControls";
-import { getAuctionSettings } from "@/lib/queries/auction";
-import { getParticipantSummaries } from "@/lib/queries/participants";
 
 export const dynamic = "force-dynamic";
 
 export default async function ImpostazioniPage() {
-  const [runs, settings, participants] = await Promise.all([
-    db.select().from(scrapeRuns).orderBy(desc(scrapeRuns.startedAt)).limit(10),
-    getAuctionSettings(),
-    getParticipantSummaries(),
-  ]);
+  const runs = await db.select().from(scrapeRuns).orderBy(desc(scrapeRuns.startedAt)).limit(10);
 
   return (
     <div className="min-h-screen p-6 font-sans sm:p-10">
       <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-          Impostazioni
+        <h1 className="flex items-center gap-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+          <span aria-hidden>⚙️</span> Impostazioni
         </h1>
         <Link href="/" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
           ← Dashboard
@@ -30,23 +21,8 @@ export default async function ImpostazioniPage() {
       </header>
 
       <section className="mb-8">
-        <h2 className="mb-2 text-sm font-medium text-zinc-500">Asta: budget e slot</h2>
-        <AuctionSettingsForm settings={settings} />
-      </section>
-
-      <section className="mb-8">
-        <h2 className="mb-2 text-sm font-medium text-zinc-500">Squadre in lega</h2>
-        <ParticipantsManager participants={participants} />
-      </section>
-
-      <section className="mb-8">
         <h2 className="mb-2 text-sm font-medium text-zinc-500">Aggiornamento dati</h2>
         <UpdateDataButtons />
-      </section>
-
-      <section className="mb-8">
-        <h2 className="mb-2 text-sm font-medium text-zinc-500">Backup asta</h2>
-        <BackupControls />
       </section>
 
       <section>

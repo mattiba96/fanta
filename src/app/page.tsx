@@ -1,16 +1,14 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { getAllPlayersFull } from "@/lib/queries/players";
-import { getParticipantSummaries } from "@/lib/queries/participants";
 import { getWatchlistedPlayerIds } from "@/lib/queries/watchlist";
 import { PlayersTable } from "@/components/players/PlayersTable";
 
 export const dynamic = "force-dynamic";
 
 export default async function Home() {
-  const [players, participants, watchlistedIds] = await Promise.all([
+  const [players, watchlistedIds] = await Promise.all([
     getAllPlayersFull(),
-    getParticipantSummaries(),
     getWatchlistedPlayerIds(),
   ]);
 
@@ -27,7 +25,7 @@ export default async function Home() {
           <NavPill href="/formazione-tipo" icon="📋" label="Formazione tipo" />
           <NavPill href="/notizie" icon="📰" label="Notizie" />
           <NavPill href="/obiettivi" icon="⭐" label="Obiettivi" />
-          <NavPill href="/asta" icon="💰" label="Asta" />
+          <NavPill href="/griglie" icon="🧮" label="Griglie" />
           <NavPill href="/impostazioni" icon="⚙️" label="Impostazioni" />
         </nav>
       </header>
@@ -42,7 +40,7 @@ export default async function Home() {
         </p>
       ) : (
         <Suspense fallback={null}>
-          <PlayersTable players={players} participants={participants} watchlistedIds={watchlistedIds} />
+          <PlayersTable players={players} watchlistedIds={watchlistedIds} />
         </Suspense>
       )}
     </div>

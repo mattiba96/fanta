@@ -1,8 +1,6 @@
-import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getPlayerBySlug } from "@/lib/queries/players";
-import { getParticipantSummaries } from "@/lib/queries/participants";
 import { getTeamSetPieces } from "@/lib/queries/setPieces";
 import { getPlayerLineupStatus } from "@/lib/queries/lineups";
 import { getAdviceForPlayer } from "@/lib/queries/advice";
@@ -11,7 +9,6 @@ import { getWatchlistEntryForPlayer } from "@/lib/queries/watchlist";
 import { getPlayerImageUrl } from "@/lib/playerImage";
 import { bandLabel } from "@/lib/advice/engine";
 import { RoleBadge } from "@/components/players/PlayersTable";
-import { QuickAssignControl } from "@/components/auction/QuickAssignControl";
 import { WatchlistControl } from "@/components/players/WatchlistControl";
 import { FcpSection, FcpSectionSkeleton } from "@/components/players/FcpSection";
 import { DescriptionSection, DescriptionSectionSkeleton } from "@/components/players/DescriptionSection";
@@ -49,17 +46,14 @@ export default async function PlayerDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const [data, participants] = await Promise.all([
-    getPlayerBySlug(slug),
-    getParticipantSummaries(),
-  ]);
+  const data = await getPlayerBySlug(slug);
   if (!data) notFound();
 
-  const { player, team, stats, statsHistory, pick, priceHistory } = data;
+  const { player, team, stats, statsHistory, priceHistory } = data;
   const [setPieces, lineupStatus, advice, news, watchlistEntry] = await Promise.all([
     getTeamSetPieces(team.id),
     getPlayerLineupStatus(player.id),
-    pick ? Promise.resolve(null) : getAdviceForPlayer(player.id),
+    getAdviceForPlayer(player.id),
     getNewsForPlayer(player.name),
     getWatchlistEntryForPlayer(player.id),
   ]);
@@ -88,17 +82,7 @@ export default async function PlayerDetailPage({
       </header>
 
       <div className="mb-6 flex flex-wrap items-start gap-2">
-        <QuickAssignControl
-          playerId={player.id}
-          roleClassic={player.roleClassic}
-          isAvailable={!pick}
-          ownedByParticipantId={pick?.participantId ?? null}
-          ownedByName={pick?.participantName ?? null}
-          ownedByIsMe={pick?.participantIsMe === 1}
-          pricePaid={pick?.price ?? null}
-          participants={participants}
-        />
-        {!pick && <WatchlistControl playerId={player.id} initial={watchlistEntry} />}
+        <WatchlistControl playerId={player.id} initial={watchlistEntry} />
       </div>
 
       {lineupStatus.length > 0 && (
@@ -125,11 +109,11 @@ export default async function PlayerDetailPage({
       </Suspense>
 
       {advice && (
-        <div className="mb-6 rounded-md border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="mb-6 rounded-md border-2 border-brand-soft bg-white p-4 dark:border-brand-soft dark:bg-zinc-900">
           <div className="mb-3 flex items-center gap-4">
             <div>
               <p className="text-xs text-zinc-500">Indice</p>
-              <p className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+              <p className="text-2xl font-semibold text-brand">
                 {advice.score}
                 <span className="text-sm font-normal text-zinc-400">/100</span>
               </p>

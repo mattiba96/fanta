@@ -1,6 +1,6 @@
-import { db, rawDb } from "./client";
+import { db } from "./client";
 import { teams } from "./schema";
-import { sql } from "drizzle-orm";
+import { count } from "drizzle-orm";
 
 // Le 20 squadre di Serie A 2026/27 (fonte: Wikipedia, verificato 17/08/2026).
 // `externalId` è l'id numerico interno di fantacalcio.it (da data-filter-team-id
@@ -42,10 +42,8 @@ async function main() {
         set: { code: team.code, name: team.name, externalId: team.externalId },
       });
   }
-  const count = rawDb.prepare("SELECT COUNT(*) as n FROM teams").get() as {
-    n: number;
-  };
-  console.log(`Squadre seedate: ${count.n}`);
+  const [{ n }] = await db.select({ n: count() }).from(teams);
+  console.log(`Squadre seedate: ${n}`);
 }
 
 main();

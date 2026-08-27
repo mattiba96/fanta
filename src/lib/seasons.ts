@@ -1,6 +1,5 @@
-// TODO(task #6 - gestione asta): leggere da auction_settings.statsSeason una volta
-// che le impostazioni sono configurabili; per ora la stagione di riferimento per
-// le statistiche pre-asta è fissa (l'unica stagione completa disponibile oggi).
+// Stagione di riferimento per le statistiche: l'unica stagione completa
+// disponibile oggi (2026-27 è appena iniziata, statistiche ancora a zero).
 export const DEFAULT_STATS_SEASON = "2025-26";
 // Stagioni storiche mostrate in scheda giocatore oltre a quella di riferimento
 // (richiesta esplicita: "statistiche fino a 4 anni fa"). Non sono la stagione

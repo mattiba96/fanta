@@ -1,14 +1,6 @@
 import { eq, and } from "drizzle-orm";
 import { db } from "@/db/client";
-import {
-  players,
-  teams,
-  playerSeasonStats,
-  auctionPicks,
-  leagueParticipants,
-  historicalAuctionPrices,
-  fcpRatings,
-} from "@/db/schema";
+import { players, teams, playerSeasonStats, historicalAuctionPrices, fcpRatings } from "@/db/schema";
 import { getAdviceForAvailablePlayers } from "./advice";
 import type { Advice } from "@/lib/advice/engine";
 import { DEFAULT_STATS_SEASON, HISTORICAL_STATS_SEASONS } from "@/lib/seasons";
@@ -33,11 +25,6 @@ export type PlayerRow = {
   fm: number | null;
   goals: number | null;
   assists: number | null;
-  isAvailable: boolean;
-  ownedByParticipantId: number | null;
-  ownedByName: string | null;
-  ownedByIsMe: boolean;
-  pricePaid: number | null;
   band: Advice["band"] | null;
   fcpTags: string[];
 };
@@ -64,10 +51,6 @@ export async function getAllPlayersFull(
       fm: playerSeasonStats.fm,
       goals: playerSeasonStats.goals,
       assists: playerSeasonStats.assists,
-      pricePaid: auctionPicks.price,
-      ownedByParticipantId: leagueParticipants.id,
-      ownedByName: leagueParticipants.name,
-      ownedByIsMe: leagueParticipants.isMe,
       fcpTags: fcpRatings.tags,
     })
     .from(players)
@@ -79,20 +62,16 @@ export async function getAllPlayersFull(
         eq(playerSeasonStats.season, season),
       ),
     )
-    .leftJoin(auctionPicks, eq(auctionPicks.playerId, players.id))
-    .leftJoin(leagueParticipants, eq(leagueParticipants.id, auctionPicks.participantId))
     .leftJoin(fcpRatings, eq(fcpRatings.playerId, players.id))
     .where(eq(players.isActive, 1));
 
-  // La fascia (band) è un percentile relativo al gruppo di ruolo tra i
-  // disponibili: va calcolata una volta sola su tutti i giocatori insieme
-  // (stesso motore usato in "Consigli"/scheda giocatore), non per riga.
+  // La fascia (band) è un percentile relativo al gruppo di ruolo: va
+  // calcolata una volta sola su tutti i giocatori insieme (stesso motore
+  // usato in "Consigli"/scheda giocatore), non per riga.
   const adviceByPlayer = await getAdviceForAvailablePlayers();
 
   return rows.map((r) => ({
     ...r,
-    isAvailable: r.ownedByParticipantId == null,
-    ownedByIsMe: r.ownedByIsMe === 1,
     band: adviceByPlayer.get(r.id)?.band ?? null,
     fcpTags: r.fcpTags ? r.fcpTags.split(";").filter(Boolean) : [],
   }));
@@ -117,19 +96,6 @@ export async function getPlayerBySlug(slug: string) {
     .map((season) => statsBySeason.get(season))
     .filter((s): s is NonNullable<typeof s> => s != null);
 
-  const [pick] = await db
-    .select({
-      id: auctionPicks.id,
-      price: auctionPicks.price,
-      participantId: auctionPicks.participantId,
-      participantName: leagueParticipants.name,
-      participantIsMe: leagueParticipants.isMe,
-    })
-    .from(auctionPicks)
-    .innerJoin(leagueParticipants, eq(leagueParticipants.id, auctionPicks.participantId))
-    .where(eq(auctionPicks.playerId, row.players.id))
-    .limit(1);
-
   const priceHistory = await db
     .select({ seasonLabel: historicalAuctionPrices.seasonLabel, price: historicalAuctionPrices.price })
     .from(historicalAuctionPrices)
@@ -140,7 +106,6 @@ export async function getPlayerBySlug(slug: string) {
     team: row.teams,
     stats,
     statsHistory,
-    pick: pick ?? null,
     priceHistory,
   };
 }

@@ -1,4 +1,4 @@
-import { eq, like, asc } from "drizzle-orm";
+import { and, eq, like, asc } from "drizzle-orm";
 import { db } from "@/db/client";
 import { fcpRatings, players, teams } from "@/db/schema";
 import { getLatestFormationByTeam } from "./formations";
@@ -46,7 +46,7 @@ function parseFormationCounts(formation: string | null): { D: number; C: number;
  * singola giornata (quello lo fanno le probabili formazioni giornata per
  * giornata, i cui dati grezzi restano usati anche qui solo per il modulo).
  */
-export async function getTypicalLineups(): Promise<TeamTypicalLineup[]> {
+export async function getTypicalLineups(teamId?: number): Promise<TeamTypicalLineup[]> {
   const [rows, formationByTeam] = await Promise.all([
     db
       .select({
@@ -63,7 +63,11 @@ export async function getTypicalLineups(): Promise<TeamTypicalLineup[]> {
       .from(fcpRatings)
       .innerJoin(players, eq(players.id, fcpRatings.playerId))
       .innerJoin(teams, eq(teams.id, players.teamId))
-      .where(like(fcpRatings.tags, "%Titolare%"))
+      .where(
+        teamId != null
+          ? and(like(fcpRatings.tags, "%Titolare%"), eq(teams.id, teamId))
+          : like(fcpRatings.tags, "%Titolare%"),
+      )
       .orderBy(asc(teams.name)),
     getLatestFormationByTeam(),
   ]);
@@ -112,4 +116,9 @@ export async function getTypicalLineups(): Promise<TeamTypicalLineup[]> {
   }
 
   return [...byTeam.values()];
+}
+
+export async function getTypicalLineupForTeam(teamId: number): Promise<TeamTypicalLineup | null> {
+  const [lineup] = await getTypicalLineups(teamId);
+  return lineup ?? null;
 }

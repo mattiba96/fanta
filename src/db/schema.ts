@@ -151,53 +151,6 @@ export const lineupPlayers = sqliteTable(
   (t) => [index("ix_lineup_players_player").on(t.playerId)],
 );
 
-export const auctionSettings = sqliteTable("auction_settings", {
-  id: integer("id").primaryKey().default(1),
-  leagueName: text("league_name"),
-  mode: text("mode").notNull().default("classic"), // classic | mantra
-  totalBudget: integer("total_budget").notNull().default(500),
-  slotsGk: integer("slots_gk").notNull().default(3),
-  slotsDef: integer("slots_def").notNull().default(8),
-  slotsMid: integer("slots_mid").notNull().default(8),
-  slotsFwd: integer("slots_fwd").notNull().default(6),
-  participants: integer("participants").default(8),
-  activeSeason: text("active_season"),
-  statsSeason: text("stats_season"),
-  // Strategia d'asta dichiarata dall'utente in linguaggio libero (es. "punto
-  // tutto su 2 top attaccanti e risparmio in difesa", "priorità ai giovani in
-  // crescita"): il consiglio AI deve seguire questa, non solo l'indice di
-  // valore generico calcolato dal motore deterministico.
-  auctionStrategy: text("auction_strategy"),
-  // Ultimo consiglio AI generato automaticamente (ogni volta che un'assegnazione
-  // cambia, non solo su richiesta manuale) — persistito così resta visibile
-  // anche dopo un refresh/navigazione, senza dover rigenerarlo a comando.
-  lastAiAdvice: text("last_ai_advice"),
-  lastAiAdviceAt: text("last_ai_advice_at"),
-  updatedAt: text("updated_at").notNull(),
-});
-
-export const leagueParticipants = sqliteTable("league_participants", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  name: text("name").notNull(),
-  isMe: integer("is_me").notNull().default(0), // esattamente un partecipante rappresenta l'utente
-  displayOrder: integer("display_order").notNull().default(0),
-  createdAt: text("created_at").notNull(),
-});
-
-export const auctionPicks = sqliteTable("auction_picks", {
-  id: integer("id").primaryKey({ autoIncrement: true }),
-  playerId: integer("player_id")
-    .notNull()
-    .unique()
-    .references(() => players.id, { onDelete: "cascade" }),
-  participantId: integer("participant_id")
-    .notNull()
-    .references(() => leagueParticipants.id, { onDelete: "cascade" }),
-  price: integer("price").notNull().default(0),
-  roleSlot: text("role_slot"), // P/D/C/A
-  pickedAt: text("picked_at").notNull(),
-});
-
 export const watchlist = sqliteTable("watchlist", {
   playerId: integer("player_id")
     .primaryKey()
@@ -223,6 +176,26 @@ export const historicalAuctionPrices = sqliteTable("historical_auction_prices", 
   sourceFile: text("source_file").notNull(),
   createdAt: text("created_at").notNull(),
 });
+
+// Griglia portieri curata editorialmente da SOS Fanta/FantaLab (alternanza
+// partite facili/difficili), preferita a un calcolo in proprio: `teamNames`/
+// `teamIds` sono elenchi separati da "|" (2 squadre per coppie, 3 per
+// terzetti). Snapshot completo ad ogni run: si cancellano le righe della
+// stagione corrente e si reinseriscono.
+export const goalkeeperGrids = sqliteTable(
+  "goalkeeper_grids",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    season: text("season").notNull(),
+    category: text("category").notNull(), // coppie | coppie_low_cost | terzetti
+    teamNames: text("team_names").notNull(), // "Roma|Bologna", nomi grezzi dalla fonte
+    teamIds: text("team_ids").notNull(), // "12|3", id squadre risolti
+    score: integer("score").notNull(), // indice di abbinamento 1-100 (più alto = meglio)
+    sourceUrl: text("source_url"),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (t) => [uniqueIndex("ux_goalkeeper_grid").on(t.season, t.category, t.teamNames)],
+);
 
 export const fcpRatings = sqliteTable(
   "fcp_ratings",

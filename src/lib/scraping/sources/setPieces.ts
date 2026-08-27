@@ -118,16 +118,16 @@ export async function run(opts: { force?: boolean } = {}): Promise<SetPieceRunRe
     }
 
     const now = nowIso();
-    const counters = runWriteTransaction((tx) => {
+    const counters = await runWriteTransaction(async (tx) => {
       let inserted = 0;
       let unmatched = 0;
       let skipped = 0;
 
-      tx.delete(setPieceRoles).where(eq(setPieceRoles.season, SEASON)).run();
+      await tx.delete(setPieceRoles).where(eq(setPieceRoles.season, SEASON));
       // Ripulisce anche i "non riconosciuti" della fonte: altrimenti un nome
       // risolto grazie a un alias o a un matching migliorato resterebbe per
       // sempre nella lista come falso residuo.
-      tx.delete(unmatchedNames).where(eq(unmatchedNames.source, "set_piece_roles")).run();
+      await tx.delete(unmatchedNames).where(eq(unmatchedNames.source, "set_piece_roles"));
 
       for (const action of actions) {
         if (action.kind === "skip_no_team") {
@@ -135,7 +135,7 @@ export async function run(opts: { force?: boolean } = {}): Promise<SetPieceRunRe
           continue;
         }
 
-        tx
+        await tx
           .insert(setPieceRoles)
           .values({
             teamId: action.teamId,
@@ -146,13 +146,12 @@ export async function run(opts: { force?: boolean } = {}): Promise<SetPieceRunRe
             season: SEASON,
             sourceUrl: URL,
             updatedAt: now,
-          })
-          .run();
+          });
         inserted++;
 
         if (!action.playerId) {
           unmatched++;
-          tx
+          await tx
             .insert(unmatchedNames)
             .values({
               source: "set_piece_roles",
@@ -164,8 +163,7 @@ export async function run(opts: { force?: boolean } = {}): Promise<SetPieceRunRe
             .onConflictDoUpdate({
               target: [unmatchedNames.source, unmatchedNames.rawName, unmatchedNames.teamId],
               set: { lastSeenAt: now },
-            })
-            .run();
+            });
         }
       }
 

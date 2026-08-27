@@ -1,11 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import type { PlayerRow } from "@/lib/queries/players";
-import type { ParticipantSummary } from "@/lib/queries/participants";
 import type { WatchlistMapEntry } from "@/lib/queries/watchlist";
-import { assignPlayer } from "@/actions/auction";
 import { RoleBadge } from "@/components/players/PlayersTable";
 import { getPlayerImageUrl } from "@/lib/playerImage";
 
@@ -27,31 +25,23 @@ const SORTS: { value: SortKey; label: string }[] = [
 
 export function BrowsePlayers({
   players,
-  participants,
   watchlistMap,
 }: {
   players: PlayerRow[];
-  participants: ParticipantSummary[];
   watchlistMap?: Map<number, WatchlistMapEntry>;
 }) {
-  const router = useRouter();
   const [role, setRole] = useState<(typeof ROLES)[number]["value"]>("C");
   const [sortKey, setSortKey] = useState<SortKey>("quotCurrentClassic");
-  const [onlyAvailable, setOnlyAvailable] = useState(true);
   const [currentPlayerId, setCurrentPlayerId] = useState<number | null>(null);
-  const [price, setPrice] = useState("1");
-  const [isPending, startTransition] = useTransition();
 
   const list = useMemo(() => {
-    let rows = players.filter((p) => p.roleClassic === role);
-    if (onlyAvailable) rows = rows.filter((p) => p.isAvailable);
-    rows = rows.slice().sort((a, b) => {
+    const rows = players.filter((p) => p.roleClassic === role);
+    return rows.slice().sort((a, b) => {
       const av = a[sortKey] ?? -Infinity;
       const bv = b[sortKey] ?? -Infinity;
       return (bv as number) - (av as number);
     });
-    return rows;
-  }, [players, role, onlyAvailable, sortKey]);
+  }, [players, role, sortKey]);
 
   useEffect(() => {
     if (currentPlayerId == null || !list.some((p) => p.id === currentPlayerId)) {
@@ -67,25 +57,6 @@ export function BrowsePlayers({
     const idx = list.findIndex((p) => p.id === currentPlayerId);
     const next = list[idx + delta];
     setCurrentPlayerId(next?.id ?? null);
-  };
-
-  const doAssign = (participantId: number) => {
-    if (!current) return;
-    const parsed = Number(price);
-    const idx = list.findIndex((p) => p.id === currentPlayerId);
-    const nextId = list[idx + 1]?.id ?? null;
-
-    startTransition(async () => {
-      await assignPlayer({
-        playerId: current.id,
-        participantId,
-        price: Number.isFinite(parsed) ? parsed : 0,
-        roleSlot: current.roleClassic,
-      });
-      router.refresh();
-      setCurrentPlayerId(nextId);
-      setPrice("1");
-    });
   };
 
   return (
@@ -115,14 +86,6 @@ export function BrowsePlayers({
             </option>
           ))}
         </select>
-        <label className="flex items-center gap-1.5 text-sm text-zinc-700 dark:text-zinc-300">
-          <input
-            type="checkbox"
-            checked={onlyAvailable}
-            onChange={(e) => setOnlyAvailable(e.target.checked)}
-          />
-          Solo disponibili
-        </label>
         <span className="ml-auto text-sm text-zinc-500">
           {list.length > 0 ? `${currentIndex + 1} / ${list.length}` : "0 / 0"}
         </span>
@@ -155,9 +118,12 @@ export function BrowsePlayers({
                 />
               )}
               <RoleBadge role={current.roleClassic} />
-              <h2 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+              <Link
+                href={`/giocatori/${current.slug}`}
+                className="text-2xl font-semibold text-zinc-900 hover:underline dark:text-zinc-50"
+              >
                 {current.name}
-              </h2>
+              </Link>
               <p className="text-zinc-500">{current.teamName}</p>
               <p className="mt-2 text-lg">
                 <span className="font-semibold text-zinc-900 dark:text-zinc-50">
@@ -192,55 +158,14 @@ export function BrowsePlayers({
             </button>
           </div>
 
-          {current.isAvailable ? (
-            <div className="mt-6 flex flex-col items-center gap-3">
-              <div className="flex items-center gap-2">
-                <label className="text-sm text-zinc-500">Prezzo</label>
-                <input
-                  type="number"
-                  min={0}
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="w-20 rounded-md border border-zinc-300 px-2 py-1 text-sm dark:border-zinc-700 dark:bg-zinc-900"
-                />
-                <button
-                  onClick={() => goTo(1)}
-                  disabled={isPending}
-                  className="rounded-md border border-zinc-300 px-3 py-1.5 text-sm text-zinc-600 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                >
-                  Salta →
-                </button>
-              </div>
-              <p className="text-xs text-zinc-400">
-                Assegna a: clicca una squadra qui sotto
-              </p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {participants.map((p) => (
-                  <button
-                    key={p.id}
-                    onClick={() => doAssign(p.id)}
-                    disabled={isPending}
-                    className={`rounded-md border px-3 py-2 text-sm disabled:opacity-50 ${
-                      p.isMe
-                        ? "border-emerald-600 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500 dark:bg-emerald-900/30 dark:text-emerald-300"
-                        : "border-zinc-300 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                    }`}
-                  >
-                    <span className="font-medium">{p.isMe ? "Io" : p.name}</span>
-                    <span className="ml-2 text-xs opacity-70">{p.budgetRemaining} cr.</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : (
-            <p className="mt-6 text-center text-sm text-zinc-400">
-              Già assegnato — vai su{" "}
-              <a href="/asta" className="underline">
-                La mia asta
-              </a>{" "}
-              per modificarlo.
-            </p>
-          )}
+          <div className="mt-6 flex justify-center">
+            <Link
+              href={`/giocatori/${current.slug}`}
+              className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-hover"
+            >
+              Vedi scheda completa
+            </Link>
+          </div>
         </div>
       )}
     </div>

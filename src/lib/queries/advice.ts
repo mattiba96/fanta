@@ -1,6 +1,6 @@
-import { and, eq, isNull, inArray } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { db } from "@/db/client";
-import { players, playerSeasonStats, setPieceRoles, lineupPlayers, auctionPicks } from "@/db/schema";
+import { players, playerSeasonStats, setPieceRoles, lineupPlayers } from "@/db/schema";
 import {
   buildAdviceForRoleGroup,
   type AdviceInput,
@@ -10,16 +10,14 @@ import {
   type LineupStatusInput,
 } from "@/lib/advice/engine";
 import { DEFAULT_STATS_SEASON, HISTORICAL_STATS_SEASONS } from "@/lib/seasons";
-import { getAuctionSettings } from "./auction";
 
 /**
- * Consigli per tutti i giocatori ancora disponibili, raggruppati per ruolo
- * (le fasce/indice sono percentili relativi al gruppo di ruolo). Fa poche
- * query e tiene tutto in memoria: per ~500-600 giocatori è questione di
- * millisecondi, non serve altra ottimizzazione per un uso personale.
+ * Consigli per tutti i giocatori attivi, raggruppati per ruolo (le
+ * fasce/indice sono percentili relativi al gruppo di ruolo). Fa poche query e
+ * tiene tutto in memoria: per ~500-600 giocatori è questione di millisecondi,
+ * non serve altra ottimizzazione per un uso personale.
  */
 export async function getAdviceForAvailablePlayers(): Promise<Map<number, Advice>> {
-  const settings = await getAuctionSettings();
   const rows = await db
     .select({
       id: players.id,
@@ -42,8 +40,7 @@ export async function getAdviceForAvailablePlayers(): Promise<Map<number, Advice
         eq(playerSeasonStats.season, DEFAULT_STATS_SEASON),
       ),
     )
-    .leftJoin(auctionPicks, eq(auctionPicks.playerId, players.id))
-    .where(and(eq(players.isActive, 1), isNull(auctionPicks.id)));
+    .where(eq(players.isActive, 1));
 
   const historicalRows = await db
     .select({
@@ -107,7 +104,7 @@ export async function getAdviceForAvailablePlayers(): Promise<Map<number, Advice
 
   const combined = new Map<number, Advice>();
   for (const [, inputs] of byRole) {
-    const adviceMap = buildAdviceForRoleGroup(inputs, settings.totalBudget);
+    const adviceMap = buildAdviceForRoleGroup(inputs);
     for (const [id, advice] of adviceMap) combined.set(id, advice);
   }
   return combined;

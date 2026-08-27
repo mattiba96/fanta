@@ -13,8 +13,8 @@ export default async function FormazioneTipoPage() {
     <div className="min-h-screen p-6 font-sans sm:p-10">
       <header className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-            Formazione tipo
+          <h1 className="flex items-center gap-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
+            <span aria-hidden>📋</span> Formazione tipo
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
             Gli 11 titolari attesi per continuità durante la stagione secondo il modulo di
@@ -44,7 +44,7 @@ export default async function FormazioneTipoPage() {
               <h2 className="mb-3 flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-50">
                 {team.teamName}
                 {team.formation && (
-                  <span className="rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-normal text-zinc-500 dark:bg-zinc-800 dark:text-zinc-400">
+                  <span className="rounded-full bg-brand-soft px-2 py-0.5 text-xs font-normal text-brand-soft-fg">
                     {team.formation}
                   </span>
                 )}
