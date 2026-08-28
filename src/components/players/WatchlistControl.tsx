@@ -65,14 +65,14 @@ export function WatchlistControl({
   return (
     <div className="w-full max-w-sm rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="mb-2 flex items-center justify-between">
-        <p className="text-xs font-medium text-zinc-500">Obiettivo</p>
+        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Obiettivo</p>
         <button onClick={() => setOpen(false)} className="text-sm text-zinc-400 hover:text-zinc-600">
           ✕
         </button>
       </div>
 
       <div className="mb-2 flex flex-col gap-2">
-        <label className="flex items-center gap-2 text-xs text-zinc-500">
+        <label className="flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
           Prezzo max (opzionale)
           <input
             type="number"

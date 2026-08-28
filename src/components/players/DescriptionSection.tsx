@@ -14,7 +14,7 @@ export async function DescriptionSection({ playerId }: { playerId: number }) {
 
   return (
     <div className="mb-6 rounded-md border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="mb-3 text-xs text-zinc-500">Fantacalcio.it</p>
+      <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">Fantacalcio.it</p>
       {generalDescription && (
         <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-300">{generalDescription}</p>
       )}

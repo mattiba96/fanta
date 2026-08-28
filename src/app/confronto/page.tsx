@@ -46,7 +46,7 @@ export default async function ConfrontoPage({
       </header>
 
       {players.length === 0 ? (
-        <p className="text-zinc-500">
+        <p className="text-zinc-500 dark:text-zinc-400">
           Nessun giocatore selezionato. Torna alla{" "}
           <Link href="/" className="underline">
             dashboard
@@ -66,7 +66,7 @@ export default async function ConfrontoPage({
                         {p.player.name}
                       </Link>
                     </p>
-                    <p className="text-xs text-zinc-500">{p.team.name}</p>
+                    <p className="text-xs text-zinc-500 dark:text-zinc-400">{p.team.name}</p>
                   </td>
                 ))}
               </Row>
@@ -151,7 +151,7 @@ export default async function ConfrontoPage({
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <tr className="border-t border-zinc-100 dark:border-zinc-800">
-      <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium text-zinc-500">
+      <th className="whitespace-nowrap px-4 py-3 text-left text-xs font-medium text-zinc-500 dark:text-zinc-400">
         {label}
       </th>
       {children}

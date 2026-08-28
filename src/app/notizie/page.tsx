@@ -26,7 +26,7 @@ export default async function NotiziePage() {
       </header>
 
       {articles.length === 0 ? (
-        <p className="text-zinc-500">
+        <p className="text-zinc-500 dark:text-zinc-400">
           Nessuna notizia in database. Vai in{" "}
           <Link href="/impostazioni" className="underline">
             Impostazioni

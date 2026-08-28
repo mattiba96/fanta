@@ -33,7 +33,7 @@ const LINEUP_STATUS_LABELS: Record<string, string> = {
 
 const LINEUP_STATUS_COLORS: Record<string, string> = {
   starter: "text-emerald-600 dark:text-emerald-400",
-  bench: "text-zinc-500",
+  bench: "text-zinc-500 dark:text-zinc-400",
   doubt: "text-amber-600 dark:text-amber-400",
   injured: "text-red-600 dark:text-red-400",
   suspended: "text-red-600 dark:text-red-400",
@@ -78,7 +78,7 @@ export default async function PlayerDetailPage({
         <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
           {player.name}
         </h1>
-        <span className="text-zinc-500">{team.name}</span>
+        <span className="text-zinc-500 dark:text-zinc-400">{team.name}</span>
       </header>
 
       <div className="mb-6 flex flex-wrap items-start gap-2">
@@ -112,21 +112,21 @@ export default async function PlayerDetailPage({
         <div className="mb-6 rounded-md border-2 border-brand-soft bg-white p-4 dark:border-brand-soft dark:bg-zinc-900">
           <div className="mb-3 flex items-center gap-4">
             <div>
-              <p className="text-xs text-zinc-500">Indice</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Indice</p>
               <p className="text-2xl font-semibold text-brand">
                 {advice.score}
                 <span className="text-sm font-normal text-zinc-400">/100</span>
               </p>
             </div>
             <div>
-              <p className="text-xs text-zinc-500">Fascia</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">Fascia</p>
               <p className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
                 {bandLabel(advice.band)}
               </p>
             </div>
             {advice.suggestedPrice != null && (
               <div>
-                <p className="text-xs text-zinc-500">Prezzo consigliato</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Prezzo consigliato</p>
                 <p className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
                   {advice.suggestedPrice}
                 </p>
@@ -157,7 +157,7 @@ export default async function PlayerDetailPage({
 
       {priceHistory.length > 0 && (
         <div className="mt-4 rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="mb-2 text-xs font-medium text-zinc-500">
+          <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
             Quanto hai pagato questo giocatore nelle tue aste passate
           </p>
           <ul className="space-y-1">
@@ -166,7 +166,7 @@ export default async function PlayerDetailPage({
               .sort((a, b) => b.seasonLabel.localeCompare(a.seasonLabel))
               .map((h, i) => (
                 <li key={i} className="flex items-center justify-between text-sm">
-                  <span className="text-zinc-500">Stagione {h.seasonLabel}</span>
+                  <span className="text-zinc-500 dark:text-zinc-400">Stagione {h.seasonLabel}</span>
                   <span className="font-semibold text-zinc-900 dark:text-zinc-50">
                     {h.price} {h.price === 1 ? "credito" : "crediti"}
                   </span>
@@ -176,7 +176,7 @@ export default async function PlayerDetailPage({
         </div>
       )}
 
-      <h2 className="mt-8 mb-2 text-sm font-medium text-zinc-500">Statistiche</h2>
+      <h2 className="mt-8 mb-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">Statistiche</h2>
       {statsHistory.length > 0 ? (
         <div className="overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
           <table className="w-full text-sm">
@@ -214,7 +214,7 @@ export default async function PlayerDetailPage({
 
       {setPieces.length > 0 && (
         <>
-          <h2 className="mt-8 mb-2 text-sm font-medium text-zinc-500">
+          <h2 className="mt-8 mb-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">
             Calci piazzati — {team.name}
           </h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -226,7 +226,7 @@ export default async function PlayerDetailPage({
                   key={kind}
                   className="rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900"
                 >
-                  <p className="mb-2 text-xs text-zinc-500">{KIND_LABELS[kind]}</p>
+                  <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">{KIND_LABELS[kind]}</p>
                   <ol className="space-y-1 text-sm">
                     {entries.map((e) => (
                       <li
@@ -250,7 +250,7 @@ export default async function PlayerDetailPage({
 
       {news.length > 0 && (
         <>
-          <h2 className="mt-8 mb-2 text-sm font-medium text-zinc-500">Notizie recenti</h2>
+          <h2 className="mt-8 mb-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">Notizie recenti</h2>
           <div className="space-y-2">
             {news.map((n) => (
               <a
@@ -261,7 +261,7 @@ export default async function PlayerDetailPage({
                 className="block rounded-md border border-zinc-200 bg-white p-3 text-sm hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800"
               >
                 <p className="font-medium text-zinc-900 dark:text-zinc-50">{n.title}</p>
-                {n.excerpt && <p className="mt-0.5 text-xs text-zinc-500">{n.excerpt}</p>}
+                {n.excerpt && <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{n.excerpt}</p>}
               </a>
             ))}
           </div>
@@ -274,7 +274,7 @@ export default async function PlayerDetailPage({
 function Stat({ label, value }: { label: string; value: string | number | null | undefined }) {
   return (
     <div className="rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="text-xs text-zinc-500">{label}</p>
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
       <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
         {value ?? "—"}
       </p>

@@ -22,7 +22,7 @@ export default async function ObiettiviPage() {
       </header>
 
       {entries.length === 0 ? (
-        <p className="text-zinc-500">
+        <p className="text-zinc-500 dark:text-zinc-400">
           Nessun obiettivo ancora segnato. Vai sulla scheda di un giocatore e clicca{" "}
           <span className="font-medium">&quot;Aggiungi a obiettivi&quot;</span>.
         </p>
@@ -53,10 +53,10 @@ export default async function ObiettiviPage() {
                       {e.name}
                     </Link>
                   </td>
-                  <td className="px-3 py-2 text-zinc-500">{e.teamCode}</td>
+                  <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">{e.teamCode}</td>
                   <td className="px-3 py-2">{e.quotCurrentClassic ?? "—"}</td>
                   <td className="px-3 py-2 font-semibold">{e.targetPrice ?? "—"}</td>
-                  <td className="px-3 py-2 text-zinc-500">{e.note ?? "—"}</td>
+                  <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">{e.note ?? "—"}</td>
                   <td className="px-3 py-2">
                     <RemoveWatchlistButton playerId={e.playerId} />
                   </td>

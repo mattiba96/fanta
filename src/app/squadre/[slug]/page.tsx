@@ -41,7 +41,7 @@ export default async function SquadraPage({ params }: { params: Promise<{ slug: 
         )}
       </header>
 
-      <h2 className="mb-2 flex items-center gap-2 text-sm font-medium text-zinc-500">
+      <h2 className="mb-2 flex items-center gap-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">
         <span aria-hidden>📋</span> Formazione tipo
       </h2>
       {typicalLineup ? (
@@ -105,7 +105,7 @@ export default async function SquadraPage({ params }: { params: Promise<{ slug: 
         </p>
       )}
 
-      <h2 className="mb-2 text-sm font-medium text-zinc-500">Statistiche di squadra</h2>
+      <h2 className="mb-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">Statistiche di squadra</h2>
       <div className="mb-8 overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
         <table className="w-full text-sm">
           <thead className="bg-zinc-100 text-left text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
@@ -158,7 +158,7 @@ export default async function SquadraPage({ params }: { params: Promise<{ slug: 
         </div>
       )}
 
-      <h2 className="mb-2 text-sm font-medium text-zinc-500">Rosa</h2>
+      <h2 className="mb-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">Rosa</h2>
       {(Object.keys(ROLE_LABELS) as Array<keyof typeof ROLE_LABELS>).map((role) => (
         <div key={role} className="mb-6">
           <p className="mb-2 text-xs text-zinc-400">{ROLE_LABELS[role]}</p>

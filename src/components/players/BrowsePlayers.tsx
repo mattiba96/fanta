@@ -86,7 +86,7 @@ export function BrowsePlayers({
             </option>
           ))}
         </select>
-        <span className="ml-auto text-sm text-zinc-500">
+        <span className="ml-auto text-sm text-zinc-500 dark:text-zinc-400">
           {list.length > 0 ? `${currentIndex + 1} / ${list.length}` : "0 / 0"}
         </span>
       </div>
@@ -124,19 +124,19 @@ export function BrowsePlayers({
               >
                 {current.name}
               </Link>
-              <p className="text-zinc-500">{current.teamName}</p>
+              <p className="text-zinc-500 dark:text-zinc-400">{current.teamName}</p>
               <p className="mt-2 text-lg">
                 <span className="font-semibold text-zinc-900 dark:text-zinc-50">
                   {current.quotCurrentClassic ?? "—"}
                 </span>{" "}
-                <span className="text-sm text-zinc-500">quotazione</span>
+                <span className="text-sm text-zinc-500 dark:text-zinc-400">quotazione</span>
                 {" · "}
                 <span className="font-semibold text-zinc-900 dark:text-zinc-50">
                   {current.fvmClassic ?? "—"}
                 </span>{" "}
-                <span className="text-sm text-zinc-500">FVM</span>
+                <span className="text-sm text-zinc-500 dark:text-zinc-400">FVM</span>
               </p>
-              <p className="text-sm text-zinc-500">
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
                 MV {current.mv?.toFixed(2) ?? "—"} · FM {current.fm?.toFixed(2) ?? "—"} · Gol{" "}
                 {current.goals ?? "—"} · Ass. {current.assists ?? "—"}
               </p>

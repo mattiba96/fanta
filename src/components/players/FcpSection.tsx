@@ -19,11 +19,11 @@ export async function FcpSection({ playerId }: { playerId: number }) {
 
   return (
     <div className="mb-6 rounded-md border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <p className="mb-3 text-xs text-zinc-500">FantaCalcioPedia</p>
+      <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">FantaCalcioPedia</p>
       <div className="mb-3 flex flex-wrap items-center gap-4">
         {fcpRating?.algScore != null && (
           <div>
-            <p className="text-xs text-zinc-500">Indice appetibilità</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Indice appetibilità</p>
             <p className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
               {fcpRating.algScore}
               <span className="text-sm font-normal text-zinc-400">/100</span>
@@ -32,7 +32,7 @@ export async function FcpSection({ playerId }: { playerId: number }) {
         )}
         {fcpComment?.injuryResistance != null && (
           <div>
-            <p className="text-xs text-zinc-500">Resistenza infortuni</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Resistenza infortuni</p>
             <p className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
               {fcpComment.injuryResistance}%
             </p>
@@ -40,7 +40,7 @@ export async function FcpSection({ playerId }: { playerId: number }) {
         )}
         {fcpComment?.investmentSolidity != null && (
           <div>
-            <p className="text-xs text-zinc-500">Solidità investimento</p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Solidità investimento</p>
             <p className="text-lg font-medium text-zinc-900 dark:text-zinc-50">
               {fcpComment.investmentSolidity}%
             </p>

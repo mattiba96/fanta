@@ -171,7 +171,7 @@ export function PlayersTable({
             </option>
           ))}
         </select>
-        <span className="ml-auto text-sm text-zinc-500">{filtered.length} giocatori</span>
+        <span className="ml-auto text-sm text-zinc-500 dark:text-zinc-400">{filtered.length} giocatori</span>
       </div>
 
       {compareSlugs.length > 0 && (
@@ -252,7 +252,7 @@ export function PlayersTable({
                     </Link>
                   </div>
                 </td>
-                <td className="px-3 py-2 text-zinc-500">{p.teamCode}</td>
+                <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">{p.teamCode}</td>
                 <td className="px-3 py-2">{p.quotCurrentClassic ?? "—"}</td>
                 <td className="px-3 py-2">{p.fvmClassic ?? "—"}</td>
                 <td className="px-3 py-2">{p.mv?.toFixed(2) ?? "—"}</td>

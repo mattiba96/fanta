@@ -32,7 +32,7 @@ export default async function ConsigliPage() {
           ← Dashboard
         </Link>
       </header>
-      <p className="mb-6 max-w-2xl text-sm text-zinc-500">
+      <p className="mb-6 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
         Indice calcolato su convenienza (fantamedia per credito speso rispetto agli altri
         giocatori dello stesso ruolo), titolarità attesa e affidabilità (presenze la scorsa
         stagione).
@@ -48,7 +48,7 @@ export default async function ConsigliPage() {
 
           return (
             <section key={value}>
-              <h2 className="mb-2 text-sm font-medium text-zinc-500">{label}</h2>
+              <h2 className="mb-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">{label}</h2>
               <div className="overflow-hidden rounded-md border border-zinc-200 dark:border-zinc-800">
                 <table className="w-full text-sm">
                   <thead className="bg-zinc-100 text-left text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">

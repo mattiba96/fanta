@@ -31,7 +31,7 @@ export default async function Home() {
       </header>
 
       {players.length === 0 ? (
-        <p className="text-zinc-500">
+        <p className="text-zinc-500 dark:text-zinc-400">
           Nessun giocatore in database. Vai in{" "}
           <Link href="/impostazioni" className="underline">
             Impostazioni

@@ -16,7 +16,7 @@ export default async function FormazioneTipoPage() {
           <h1 className="flex items-center gap-2 text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
             <span aria-hidden>📋</span> Formazione tipo
           </h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             Gli 11 titolari attesi per continuità durante la stagione secondo il modulo di
             ogni squadra, con i ballottaggi per chi è vicino al posto da titolare.
           </p>
@@ -27,7 +27,7 @@ export default async function FormazioneTipoPage() {
       </header>
 
       {teams.length === 0 ? (
-        <p className="text-zinc-500">
+        <p className="text-zinc-500 dark:text-zinc-400">
           Nessun dato disponibile. Vai in{" "}
           <Link href="/impostazioni" className="underline">
             Impostazioni

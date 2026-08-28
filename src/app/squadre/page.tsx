@@ -11,7 +11,7 @@ export default async function SquadrePage() {
       <header className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">⚽ Squadre</h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
             Statistiche di squadra, modulo e consigli d&apos;acquisto per ogni rosa.
           </p>
         </div>
@@ -29,7 +29,7 @@ export default async function SquadrePage() {
           >
             <p className="font-medium text-zinc-900 dark:text-zinc-50">{team.teamName}</p>
             {team.formation && (
-              <p className="mt-1 text-xs text-zinc-500">{team.formation}</p>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{team.formation}</p>
             )}
           </Link>
         ))}
