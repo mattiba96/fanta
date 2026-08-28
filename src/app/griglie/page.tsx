@@ -17,13 +17,14 @@ function DifficultyDot({ value }: { value: number }) {
 }
 
 function GoalkeeperEntryCard({ entry }: { entry: GoalkeeperGridEntry }) {
+  const b = entry.difficultyBreakdown;
   return (
     <div className="rounded-md border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
       <div className="flex items-center justify-between">
         <div className="flex flex-wrap items-center gap-3">
           {entry.teams.map((t, i) => (
             <div key={t.teamId} className="flex items-center gap-3">
-              {i > 0 && <span className="text-zinc-300 dark:text-zinc-600">+</span>}
+              {i > 0 && <span className="text-zinc-500 dark:text-zinc-400">+</span>}
               <div>
                 {t.keeper ? (
                   <Link
@@ -35,7 +36,7 @@ function GoalkeeperEntryCard({ entry }: { entry: GoalkeeperGridEntry }) {
                 ) : (
                   <span className="font-semibold text-zinc-400">—</span>
                 )}
-                <p className="text-xs text-zinc-500">{t.teamName}</p>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">{t.teamName}</p>
               </div>
             </div>
           ))}
@@ -45,6 +46,19 @@ function GoalkeeperEntryCard({ entry }: { entry: GoalkeeperGridEntry }) {
           <p className="text-lg font-semibold text-brand">{entry.score}</p>
         </div>
       </div>
+      {b && (
+        <p className="mt-2 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-full bg-emerald-500" /> {b.easy} facili
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-full bg-amber-500" /> {b.medium} medie
+          </span>
+          <span className="inline-flex items-center gap-1">
+            <span className="inline-block h-2 w-2 rounded-full bg-red-500" /> {b.hard} difficili
+          </span>
+        </p>
+      )}
     </div>
   );
 }
@@ -74,7 +88,7 @@ export default async function GrigliePage() {
         <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
           <span aria-hidden>🧤</span> Griglia portieri
         </h2>
-        <p className="mb-4 max-w-2xl text-sm text-zinc-500">
+        <p className="mb-4 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
           Coppie e terzetti consigliati per l&apos;alternanza tra partite facili e difficili, curati da{" "}
           <a
             href={keeperGrid.sourceUrl ?? "https://www.sosfanta.com"}
@@ -85,6 +99,14 @@ export default async function GrigliePage() {
             SOS Fanta / FantaLab
           </a>{" "}
           — indice di abbinamento da 1 a 100, più alto è meglio.
+          {keeperGrid.matchdays.length > 0 && (
+            <>
+              {" "}Il conteggio facili/medie/difficili è calcolato da noi sul calendario reale delle giornate{" "}
+              {keeperGrid.matchdays[0]}–{keeperGrid.matchdays[keeperGrid.matchdays.length - 1]} (per ogni giornata
+              conta l&apos;impegno più facile tra le squadre della coppia/terzetto, dato che scegli di volta in
+              volta chi schierare).
+            </>
+          )}
         </p>
 
         {noKeeperGrid ? (
@@ -99,7 +121,7 @@ export default async function GrigliePage() {
           <>
             {keeperGrid.coppie.length > 0 && (
               <div className="mb-6">
-                <p className="mb-2 text-xs font-medium text-zinc-500">Coppie</p>
+                <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">Coppie</p>
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                   {keeperGrid.coppie.map((e, i) => (
                     <GoalkeeperEntryCard key={i} entry={e} />
@@ -109,7 +131,7 @@ export default async function GrigliePage() {
             )}
             {keeperGrid.coppieLowCost.length > 0 && (
               <div className="mb-6">
-                <p className="mb-2 text-xs font-medium text-zinc-500">Coppie low cost</p>
+                <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">Coppie low cost</p>
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                   {keeperGrid.coppieLowCost.map((e, i) => (
                     <GoalkeeperEntryCard key={i} entry={e} />
@@ -119,7 +141,7 @@ export default async function GrigliePage() {
             )}
             {keeperGrid.terzetti.length > 0 && (
               <div>
-                <p className="mb-2 text-xs font-medium text-zinc-500">Terzetti</p>
+                <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">Terzetti</p>
                 <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                   {keeperGrid.terzetti.map((e, i) => (
                     <GoalkeeperEntryCard key={i} entry={e} />
@@ -135,7 +157,7 @@ export default async function GrigliePage() {
         <h2 className="mb-1 flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
           <span aria-hidden>⚽</span> Griglia attaccanti
         </h2>
-        <p className="mb-4 max-w-2xl text-sm text-zinc-500">
+        <p className="mb-4 max-w-2xl text-sm text-zinc-500 dark:text-zinc-400">
           Squadre ordinate per calendario più favorevole nelle prossime giornate (avversari con difesa
           debole = più occasioni da gol per i loro attaccanti).
         </p>

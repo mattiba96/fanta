@@ -164,30 +164,78 @@ async function getStartingGoalkeepers(): Promise<Map<number, TeamGoalkeeper>> {
 
 export type GoalkeeperGridCategory = "coppie" | "coppie_low_cost" | "terzetti";
 
+export type DifficultyBreakdown = { easy: number; medium: number; hard: number };
+
 export type GoalkeeperGridEntry = {
   score: number;
   teams: Array<TeamRef & { keeper: TeamGoalkeeper | null }>;
+  /** Quante delle prossime giornate sono "facili/medie/difficili" per la
+   * coppia/terzetto — null se il calendario non è ancora stato scaricato. */
+  difficultyBreakdown: DifficultyBreakdown | null;
 };
+
+// Stesse soglie usate per i pallini della griglia attaccanti: 0-100, più
+// basso = più facile (attacco avversario debole).
+function classifyDifficulty(value: number): keyof DifficultyBreakdown {
+  if (value <= 33) return "easy";
+  if (value <= 66) return "medium";
+  return "hard";
+}
 
 /**
  * Griglia portieri curata editorialmente da SOS Fanta/FantaLab (alternanza
  * partite facili/difficili secondo la loro redazione), preferita a un calcolo
  * in proprio sulla sola forza offensiva dell'anno scorso — più affidabile,
  * specie a inizio stagione. Ogni squadra della fonte è arricchita col
- * portiere titolare che l'app già conosce.
+ * portiere titolare che l'app già conosce, più un conteggio facili/medie/
+ * difficili calcolato sul calendario reale (per ogni giornata si considera la
+ * squadra con l'impegno più facile tra quelle della coppia/terzetto, dato che
+ * si sceglie di volta in volta chi schierare).
  */
-export async function getGoalkeeperPairingGrid(): Promise<{
+export async function getGoalkeeperPairingGrid(windowSize = DEFAULT_WINDOW_SIZE): Promise<{
   coppie: GoalkeeperGridEntry[];
   coppieLowCost: GoalkeeperGridEntry[];
   terzetti: GoalkeeperGridEntry[];
   sourceUrl: string | null;
+  matchdays: number[];
 }> {
-  const [rows, keeperByTeam, teamRows] = await Promise.all([
+  const [rows, keeperByTeam, teamRows, matchdays] = await Promise.all([
     db.select().from(goalkeeperGrids).where(eq(goalkeeperGrids.season, CALENDAR_SEASON)),
     getStartingGoalkeepers(),
     db.select({ teamId: teams.id, teamCode: teams.code, teamName: teams.name }).from(teams),
+    getUpcomingMatchdayWindow(windowSize),
   ]);
   const teamById = new Map(teamRows.map((t) => [t.teamId, t]));
+
+  let difficultyByTeam = new Map<number, Map<number, number>>();
+  if (matchdays.length > 0) {
+    const [fixtureRows, strengthByTeam] = await Promise.all([
+      getFixturesForMatchdays(matchdays),
+      getAllTeamsStrength(),
+    ]);
+    for (const f of fixtureRows) {
+      const homeDifficulty = strengthByTeam.get(f.awayTeamId)?.attackScore ?? 50;
+      const awayDifficulty = strengthByTeam.get(f.homeTeamId)?.attackScore ?? 50;
+      if (!difficultyByTeam.has(f.homeTeamId)) difficultyByTeam.set(f.homeTeamId, new Map());
+      if (!difficultyByTeam.has(f.awayTeamId)) difficultyByTeam.set(f.awayTeamId, new Map());
+      difficultyByTeam.get(f.homeTeamId)!.set(f.matchday, homeDifficulty);
+      difficultyByTeam.get(f.awayTeamId)!.set(f.matchday, awayDifficulty);
+    }
+  }
+
+  function buildBreakdown(teamIds: number[]): DifficultyBreakdown | null {
+    if (matchdays.length === 0) return null;
+    const teamDifficulties = teamIds.map((id) => difficultyByTeam.get(id));
+    if (teamDifficulties.some((d) => !d)) return null;
+
+    const breakdown: DifficultyBreakdown = { easy: 0, medium: 0, hard: 0 };
+    for (const md of matchdays) {
+      const values = teamDifficulties.map((d) => d!.get(md)).filter((v): v is number => v != null);
+      if (values.length === 0) continue;
+      breakdown[classifyDifficulty(Math.min(...values))]++;
+    }
+    return breakdown;
+  }
 
   const entries: Array<{ category: GoalkeeperGridCategory; entry: GoalkeeperGridEntry }> = [];
   for (const row of rows) {
@@ -199,6 +247,7 @@ export async function getGoalkeeperPairingGrid(): Promise<{
       entry: {
         score: row.score,
         teams: rowTeams.map((t) => ({ ...t, keeper: keeperByTeam.get(t.teamId) ?? null })),
+        difficultyBreakdown: buildBreakdown(teamIds),
       },
     });
   }
@@ -214,6 +263,7 @@ export async function getGoalkeeperPairingGrid(): Promise<{
     coppieLowCost: byCategory("coppie_low_cost"),
     terzetti: byCategory("terzetti"),
     sourceUrl: rows[0]?.sourceUrl ?? null,
+    matchdays,
   };
 }
 
