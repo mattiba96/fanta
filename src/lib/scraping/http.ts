@@ -97,8 +97,15 @@ export async function fetchHtml(
   }
 
   const html = await fetchWithRetry(url, opts.maxAttempts ?? 3, opts.timeoutMs ?? 15000);
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
-  fs.writeFileSync(file, html, "utf-8");
+  try {
+    fs.mkdirSync(CACHE_DIR, { recursive: true });
+    fs.writeFileSync(file, html, "utf-8");
+  } catch {
+    // Filesystem di sola lettura in produzione (Vercel): l'HTML appena
+    // scaricato viene comunque ritornato a chi chiama, semplicemente non
+    // resta in cache per la prossima volta — la cache su disco è solo un
+    // best-effort per sviluppare/testare i parser offline in locale.
+  }
   return { html, fromCache: false, hash: hashOf(html) };
 }
 

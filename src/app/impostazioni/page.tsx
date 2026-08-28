@@ -5,6 +5,12 @@ import { desc } from "drizzle-orm";
 import { UpdateDataButtons } from "@/components/data/UpdateDataButtons";
 
 export const dynamic = "force-dynamic";
+// Le Server Action di "Aggiorna tutto"/"Aggiorna calendario" incatenano più
+// fonti con throttle da 1.5-2s l'una: 60s (il massimo del piano Hobby di
+// Vercel) è il tetto più alto disponibile, contro il default molto più
+// corto che le faceva morire a metà lasciando una riga scrape_runs bloccata
+// su "running" per sempre.
+export const maxDuration = 60;
 
 export default async function ImpostazioniPage() {
   const runs = await db.select().from(scrapeRuns).orderBy(desc(scrapeRuns.startedAt)).limit(10);
@@ -21,12 +27,12 @@ export default async function ImpostazioniPage() {
       </header>
 
       <section className="mb-8">
-        <h2 className="mb-2 text-sm font-medium text-zinc-500">Aggiornamento dati</h2>
+        <h2 className="mb-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">Aggiornamento dati</h2>
         <UpdateDataButtons />
       </section>
 
       <section>
-        <h2 className="mb-2 text-sm font-medium text-zinc-500">Ultimi aggiornamenti</h2>
+        <h2 className="mb-2 text-sm font-medium text-zinc-500 dark:text-zinc-400">Ultimi aggiornamenti</h2>
         <div className="overflow-x-auto rounded-md border border-zinc-200 dark:border-zinc-800">
           <table className="w-full text-sm">
             <thead className="bg-zinc-100 text-left text-zinc-500 dark:bg-zinc-900 dark:text-zinc-400">
@@ -44,10 +50,10 @@ export default async function ImpostazioniPage() {
                   <td className="px-3 py-2">
                     <StatusPill status={run.status} />
                   </td>
-                  <td className="px-3 py-2 text-zinc-500">
+                  <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">
                     {new Date(run.startedAt).toLocaleString("it-IT")}
                   </td>
-                  <td className="px-3 py-2 text-zinc-500">{run.message ?? "—"}</td>
+                  <td className="px-3 py-2 text-zinc-500 dark:text-zinc-400">{run.message ?? "—"}</td>
                 </tr>
               ))}
               {runs.length === 0 && (

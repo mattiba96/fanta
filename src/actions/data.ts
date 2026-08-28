@@ -10,7 +10,6 @@ import * as goalkeeperGrid from "@/lib/scraping/sources/goalkeeperGrid";
 import * as news from "@/lib/scraping/sources/news";
 import * as fcNews from "@/lib/scraping/sources/fcNews";
 import * as fcpRatings from "@/lib/scraping/sources/fcpRatings";
-import * as playerDescription from "@/lib/scraping/sources/playerDescription";
 import { DEFAULT_STATS_SEASON } from "@/lib/queries/players";
 
 export type RefreshOutcome = {
@@ -114,34 +113,6 @@ export async function refreshFcpRatings(): Promise<RefreshOutcome> {
   }
 }
 
-export async function refreshDescriptions(): Promise<RefreshOutcome> {
-  try {
-    const result = await playerDescription.run();
-    revalidatePath("/");
-    revalidatePath("/giocatori/[slug]", "page");
-    return {
-      ok: result.ok,
-      message: `Descrizioni: ${result.playersUpdated}/${result.playersSeen} aggiornate, ${result.playersFailed} fallite.`,
-    };
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : String(err) };
-  }
-}
-
-export async function refreshFcpComments(): Promise<RefreshOutcome> {
-  try {
-    const result = await fcpRatings.runComments();
-    revalidatePath("/");
-    revalidatePath("/giocatori/[slug]", "page");
-    return {
-      ok: result.ok,
-      message: `Commenti FantaCalcioPedia: ${result.playersUpdated}/${result.playersSeen} aggiornati, ${result.playersFailed} falliti.`,
-    };
-  } catch (err) {
-    return { ok: false, message: err instanceof Error ? err.message : String(err) };
-  }
-}
-
 export async function refreshProbabiliFormazioni(): Promise<RefreshOutcome> {
   try {
     const result = await probabiliFormazioni.run();
@@ -202,6 +173,15 @@ export type RefreshAllStep = { label: string; outcome: RefreshOutcome };
  * Il calendario NON è incluso qui di proposito: scarica 38 pagine (60-90s)
  * per un dato che cambia raramente una volta pubblicato, quindi ha un suo
  * bottone separato invece di rallentare "Aggiorna tutto" ad ogni click.
+ *
+ * Descrizioni/commenti FantaCalcioPedia NON sono incluse: sono un fetch per
+ * ogni giocatore attivo (500+, con lo stesso throttle da 1.5s di http.ts),
+ * quindi anche solo il backfill iniziale richiede 10+ minuti — ben oltre il
+ * limite di 60s di una funzione serverless Vercel (piano Hobby). Vanno
+ * lanciate da locale, senza limiti di tempo: `npm run scrape -- descrizioni`
+ * e `npm run scrape -- fcp-commenti`. Sulla scheda giocatore restano comunque
+ * disponibili on-demand (getOrFetchDescription/getOrFetchComment), che fanno
+ * un solo fetch alla volta con timeout corto.
  */
 export async function refreshAll(): Promise<RefreshAllStep[]> {
   const steps: Array<{ label: string; run: () => Promise<RefreshOutcome> }> = [
@@ -210,8 +190,6 @@ export async function refreshAll(): Promise<RefreshAllStep[]> {
     { label: "Rigoristi/tiratori", run: refreshSetPieces },
     { label: "Probabili formazioni", run: refreshProbabiliFormazioni },
     { label: "Indice appetibilità", run: refreshFcpRatings },
-    { label: "Commenti FantaCalcioPedia", run: refreshFcpComments },
-    { label: "Descrizioni fantacalcio.it", run: refreshDescriptions },
     { label: "Notizie (SosFanta)", run: refreshNews },
     { label: "Notizie (Fantacalcio.it)", run: refreshFcNews },
     { label: "Griglia portieri (SOS Fanta)", run: refreshGoalkeeperGrid },

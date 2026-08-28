@@ -33,7 +33,7 @@ export function UpdateDataButtons() {
           disabled={isPending}
           className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-brand-hover disabled:opacity-50"
         >
-          {isPending ? "Aggiornamento in corso… (qualche minuto)" : "Aggiorna tutto"}
+          {isPending ? "Aggiornamento in corso… (fino a un minuto)" : "Aggiorna tutto"}
         </button>
         <button
           onClick={runCalendar}
@@ -45,12 +45,16 @@ export function UpdateDataButtons() {
       </div>
       <p className="mt-1.5 text-xs text-zinc-400">
         Il calendario (38 giornate) serve alla griglia portieri/attaccanti — cambia raramente, quindi ha un
-        bottone separato.
+        bottone separato. Descrizioni e commenti FantaCalcioPedia dei singoli giocatori non sono qui (troppo
+        lenti per una richiesta web): si aggiornano da soli quando apri una scheda giocatore, oppure in blocco
+        da terminale con <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">npm run scrape --
+        descrizioni</code> e <code className="rounded bg-zinc-100 px-1 py-0.5 dark:bg-zinc-800">npm run scrape
+        -- fcp-commenti</code>.
       </p>
 
       {report && (
         <div className="mt-3 max-w-md rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
-          <p className="mb-2 text-xs font-medium text-zinc-500">Report aggiornamento</p>
+          <p className="mb-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">Report aggiornamento</p>
           <ul className="space-y-1.5">
             {report.map((step, i) => (
               <li key={i} className="text-sm">
