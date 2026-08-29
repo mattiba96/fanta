@@ -5,9 +5,11 @@ import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { launchFantaAstaDesktop } from "@/actions/liveAuction";
 import type { Role } from "@/lib/advice/engine";
 import type { LiveAdvice, LiveAuctionSnapshot } from "@/lib/liveAuction/recommend";
+import type { FantaAstaTeamSnapshot } from "@/lib/liveAuction/fantaAstaReader";
 
 const POLL_INTERVAL_MS = 4000;
-const STORAGE_KEY = "fantacucciolo:myTeamIndex";
+const STORAGE_KEY = "fantacucciolo:myTeamName";
+const DEFAULT_TEAM_NAME = "Io";
 
 const ROLE_ORDER: Role[] = ["P", "D", "C", "A"];
 const ROLE_LABELS: Record<Role, string> = {
@@ -37,7 +39,7 @@ function isErrorResponse(data: unknown): data is { error: string; source?: Error
 }
 
 export default function AstaLivePage() {
-  const [myTeamIndex, setMyTeamIndex] = useState(0);
+  const [myTeamName, setMyTeamName] = useState(DEFAULT_TEAM_NAME);
   const [prefsReady, setPrefsReady] = useState(false);
   const [snapshot, setSnapshot] = useState<LiveAuctionSnapshot | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -52,25 +54,24 @@ export default function AstaLivePage() {
   const requestSeqRef = useRef(0);
 
   // La preferenza va letta da localStorage prima del primo poll, altrimenti
-  // partiremmo sempre con myTeamIndex=0 e poi "salteremmo" al valore salvato.
+  // partiremmo sempre col nome di default e poi "salteremmo" al valore salvato.
   useEffect(() => {
     const stored = window.localStorage.getItem(STORAGE_KEY);
-    if (stored != null) {
-      const parsed = Number(stored);
-      if (Number.isFinite(parsed)) setMyTeamIndex(parsed);
-    }
+    if (stored != null && stored.trim()) setMyTeamName(stored);
     setPrefsReady(true);
   }, []);
 
   useEffect(() => {
     if (!prefsReady) return;
-    window.localStorage.setItem(STORAGE_KEY, String(myTeamIndex));
-  }, [myTeamIndex, prefsReady]);
+    window.localStorage.setItem(STORAGE_KEY, myTeamName);
+  }, [myTeamName, prefsReady]);
 
-  const fetchState = useCallback(async (teamIndex: number) => {
+  const fetchState = useCallback(async (teamName: string) => {
     const requestId = ++requestSeqRef.current;
     try {
-      const res = await fetch(`/api/asta-live/state?myTeamIndex=${teamIndex}`, { cache: "no-store" });
+      const res = await fetch(`/api/asta-live/state?myTeamName=${encodeURIComponent(teamName)}`, {
+        cache: "no-store",
+      });
       const data: ApiResponse = await res.json();
       if (requestId !== requestSeqRef.current) return; // superata da una richiesta più recente
       if (!res.ok || isErrorResponse(data)) {
@@ -92,11 +93,11 @@ export default function AstaLivePage() {
   }, []);
 
   useEffect(() => {
-    if (!prefsReady) return;
-    fetchState(myTeamIndex);
-    const id = setInterval(() => fetchState(myTeamIndex), POLL_INTERVAL_MS);
+    if (!prefsReady || !myTeamName.trim()) return;
+    fetchState(myTeamName);
+    const id = setInterval(() => fetchState(myTeamName), POLL_INTERVAL_MS);
     return () => clearInterval(id);
-  }, [prefsReady, myTeamIndex, fetchState]);
+  }, [prefsReady, myTeamName, fetchState]);
 
   const handleLaunch = () => {
     setJustLaunched(false);
@@ -116,13 +117,12 @@ export default function AstaLivePage() {
         </h1>
         <div className="flex items-center gap-4">
           <label className="flex items-center gap-2 text-sm text-zinc-500 dark:text-zinc-400">
-            La mia squadra (indice)
+            La mia squadra (nome)
             <input
-              type="number"
-              min={0}
-              value={myTeamIndex}
-              onChange={(e) => setMyTeamIndex(Math.max(0, Number(e.target.value) || 0))}
-              className="w-16 rounded-md border border-zinc-200 bg-white px-2 py-1 text-center text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50"
+              type="text"
+              value={myTeamName}
+              onChange={(e) => setMyTeamName(e.target.value)}
+              className="w-28 rounded-md border border-zinc-200 bg-white px-2 py-1 text-center text-zinc-900 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-50"
             />
           </label>
           <Link href="/" className="text-sm text-zinc-500 hover:underline dark:text-zinc-400">
@@ -170,6 +170,7 @@ export default function AstaLivePage() {
       {snapshot && (
         <>
           <TeamSummary snapshot={snapshot} />
+          <OtherTeamsRecap teams={snapshot.otherTeams} />
           <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
             {ROLE_ORDER.map((role) => (
               <RoleSection key={role} role={role} picks={snapshot.bestPicksByRole[role]} />
@@ -197,7 +198,7 @@ function TeamSummary({ snapshot }: { snapshot: LiveAuctionSnapshot }) {
         {myTeam ? myTeam.name : "La mia squadra"}
         {!myTeam && (
           <span className="ml-2 text-xs text-zinc-400">
-            (nessun acquisto registrato per questo indice squadra: valori di default)
+            (nessun acquisto registrato per questo nome squadra: valori di default)
           </span>
         )}
       </h2>
@@ -208,6 +209,42 @@ function TeamSummary({ snapshot }: { snapshot: LiveAuctionSnapshot }) {
         <Stat label="Difensori da comprare" value={slots.def} />
         <Stat label="Centrocampisti da comprare" value={slots.mid} />
         <Stat label="Attaccanti da comprare" value={slots.atk} />
+      </div>
+    </section>
+  );
+}
+
+function OtherTeamsRecap({ teams }: { teams: FantaAstaTeamSnapshot[] }) {
+  if (teams.length === 0) return null;
+
+  return (
+    <section className="mt-6 rounded-md border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
+      <h2 className="mb-3 text-sm font-medium text-zinc-500 dark:text-zinc-400">Altre squadre</h2>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="text-left text-zinc-500 dark:text-zinc-400">
+            <tr>
+              <th className="py-1 pr-4 font-medium">Squadra</th>
+              <th className="py-1 pr-4 font-medium">Crediti</th>
+              <th className="py-1 pr-4 font-medium">P</th>
+              <th className="py-1 pr-4 font-medium">D</th>
+              <th className="py-1 pr-4 font-medium">C</th>
+              <th className="py-1 font-medium">A</th>
+            </tr>
+          </thead>
+          <tbody>
+            {teams.map((team) => (
+              <tr key={team.index} className="border-t border-zinc-100 dark:border-zinc-800">
+                <td className="py-1.5 pr-4 font-medium text-zinc-900 dark:text-zinc-50">{team.name}</td>
+                <td className="py-1.5 pr-4 text-zinc-600 dark:text-zinc-300">{team.credits ?? team.budget}</td>
+                <td className="py-1.5 pr-4 text-zinc-600 dark:text-zinc-300">{team.rosterHash.gk}</td>
+                <td className="py-1.5 pr-4 text-zinc-600 dark:text-zinc-300">{team.rosterHash.def}</td>
+                <td className="py-1.5 pr-4 text-zinc-600 dark:text-zinc-300">{team.rosterHash.mid}</td>
+                <td className="py-1.5 text-zinc-600 dark:text-zinc-300">{team.rosterHash.atk}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </section>
   );

@@ -56,16 +56,18 @@ const MAX_PICKS_PER_ROLE = 30;
 
 const EMPTY_ROLE_RECORD = <T>(): Record<Role, T[]> => ({ P: [], D: [], C: [], A: [] });
 
-export async function buildLiveAuctionSnapshot(myTeamIndex: number): Promise<LiveAuctionSnapshot> {
+export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<LiveAuctionSnapshot> {
   const state = await readFantaAstaState();
   const teams = deriveTeams(state);
-  const myTeam = teams.find((t) => t.index === myTeamIndex) ?? null;
-  const otherTeams = teams.filter((t) => t.index !== myTeamIndex);
+  const normalizedName = myTeamName.trim().toLowerCase();
+  const myTeam = teams.find((t) => t.name.trim().toLowerCase() === normalizedName) ?? null;
+  const otherTeams = teams.filter((t) => t !== myTeam);
 
   // Finché la mia squadra non ha ancora vinto un giocatore, non esiste uno
   // snapshot per lei in `transactions` (deriveTeams si basa solo su quello):
   // myTeam è quindi null nel normalissimo caso "asta in corso, ancora nessun
-  // acquisto mio", non solo per un indice non valido/stale. In questo caso
+  // acquisto mio", non solo per un nome che non corrisponde a nessuna
+  // squadra. In questo caso
   // usiamo i valori di default dell'asta (budget/slot iniziali) invece di
   // trattare la mia squadra come "senza alcun limite di budget o di ruolo".
   const rosterComposition = state.data.settings.rosterComposition;
