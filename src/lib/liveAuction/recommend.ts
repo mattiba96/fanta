@@ -366,7 +366,7 @@ function buildVerdict(
   roleHistoricalMax: number | null,
 ): Verdict | null {
   if (!selected.advice) return null;
-  const { score, suggestedPrice: fvmPrice } = selected.advice;
+  const { suggestedPrice: fvmPrice } = selected.advice;
 
   // Prezzo storico reale (aste passate di questo utente, tabella
   // historical_auction_prices), quando disponibile: più affidabile della
@@ -419,37 +419,39 @@ function buildVerdict(
   }
 
   // "punteggio" è un indice di VALORE (fantamedia rispetto al prezzo), non di
-  // qualità assoluta: un giocatore economico con buone statistiche può avere
-  // lo stesso punteggio di uno molto più costoso e forte, perché il prezzo
-  // basso gonfia il rapporto. Confrontare per solo punteggio metterebbe sullo
-  // stesso piano fasce di mercato completamente diverse (visto dal vivo:
-  // Bremer, quotazione alta, vs De Winter, quotazione bassa) — le alternative
-  // vanno quindi confrontate solo dentro la stessa fascia (o quella subito
-  // sopra), mai ignorando del tutto la fascia.
-  const sameTierOrAbove = alternatives.filter((a) => BAND_RANK[a.advice.band] >= BAND_RANK[selected.advice!.band] - 1);
+  // qualità assoluta: un giocatore economico con buone statistiche ha quasi
+  // sempre un punteggio più alto di uno costoso e più forte, perché il
+  // prezzo basso gonfia il rapporto (visto dal vivo due volte: Bremer contro
+  // De Winter, poi Calhanoglu "Top" punteggio 40 contro Karlstrom
+  // "Semi-top" punteggio 73 — un solo scalino di fascia di tolleranza non
+  // bastava). Confrontare "conviene aspettare" per punteggio, anche solo tra
+  // fasce adiacenti, mette sullo stesso piano giocatori di qualità/prezzo di
+  // mercato molto diversi. Le due verifiche restano quindi rigide sulla
+  // fascia: "c'è un pari livello a meno" guarda SOLO la stessa fascia
+  // esatta, "c'è di meglio" SOLO fasce più alte — mai un punteggio più alto
+  // in una fascia uguale o inferiore, che è proprio il pattern fuorviante.
+  const sameBand = alternatives.filter((a) => a.advice.band === selected.advice!.band);
+  const higherBand = alternatives.filter((a) => BAND_RANK[a.advice.band] > BAND_RANK[selected.advice!.band]);
 
-  const similarCheaper = sameTierOrAbove.find(
+  const similarCheaper = sameBand.find(
     (a) =>
-      a.advice.score >= score - 8 &&
-      referencePrice != null &&
-      a.advice.suggestedPrice != null &&
-      a.advice.suggestedPrice < referencePrice - 3,
+      referencePrice != null && a.advice.suggestedPrice != null && a.advice.suggestedPrice < referencePrice - 3,
   );
   if (similarCheaper) {
     return {
       action: "aspetta",
       headline: "Puoi aspettare",
-      detail: `${similarCheaper.player.name} (${bandLabel(similarCheaper.advice.band)}) vale quasi altrettanto (punteggio ${similarCheaper.advice.score}) probabilmente a un prezzo più basso (~${similarCheaper.advice.suggestedPrice}).`,
+      detail: `${similarCheaper.player.name} è nella stessa fascia (${bandLabel(similarCheaper.advice.band)}) probabilmente a un prezzo più basso (~${similarCheaper.advice.suggestedPrice}).`,
       ceiling,
     };
   }
 
-  const better = sameTierOrAbove.find((a) => a.advice.score > score + 5);
+  const better = higherBand[0];
   if (better) {
     return {
       action: "aspetta",
-      headline: "C'è di meglio ancora libero",
-      detail: `${better.player.name} ha un punteggio più alto (${better.advice.score}) tra i liberi in questo ruolo.`,
+      headline: "C'è una fascia più alta ancora libera",
+      detail: `${better.player.name} (${bandLabel(better.advice.band)}) è di fascia superiore tra i liberi in questo ruolo.`,
       ceiling,
     };
   }
