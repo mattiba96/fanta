@@ -139,6 +139,12 @@ export interface FantaAstaData {
   selector?: FantaAstaSelector;
   downloadPlayersDate?: number;
   transactions: FantaAstaTransaction[];
+  // Elenco completo di TUTTI gli slot squadra configurati (anche quelli senza
+  // ancora nessun acquisto, invisibili nelle sole transazioni). Usato solo
+  // per nome/avatar: budget/rosterHash vanno ricalcolati dalle transazioni
+  // (vedi deriveTeams) perché questo campo può restare indietro rispetto
+  // agli acquisti reali.
+  teams?: FantaAstaTeamSnapshot[];
   [key: string]: unknown;
 }
 
@@ -394,12 +400,73 @@ export async function readFantaAstaState(opts?: { port?: number }): Promise<Fant
   );
 }
 
+/**
+ * Ricava squadre/budget/slot dalle sole TRANSAZIONI, non dai campi già
+ * calcolati altrove (data.teams, o lo snapshot "team" imbustato in ogni
+ * transazione): osservato dal vivo che quei campi possono restare indietro
+ * rispetto agli acquisti reali (es. un acquisto pagato regolarmente ma non
+ * riflesso in data.teams), mentre sommare le transazioni una per una dà
+ * sempre il conto giusto, verificato contro i numeri mostrati da FantaAsta
+ * Desktop stesso. data.teams serve solo per nome/avatar delle squadre che
+ * non hanno ancora comprato nulla (altrimenti invisibili qui).
+ */
 export function deriveTeams(state: FantaAstaState): FantaAstaTeamSnapshot[] {
-  const byIndex = new Map<number, FantaAstaTeamSnapshot>();
+  const rosterComposition = state.data.settings.rosterComposition;
+  const startingBudget = state.data.settings.startingBudget;
+  const totalRosterSlots =
+    rosterComposition.gk + rosterComposition.def + rosterComposition.mid + rosterComposition.atk;
 
-  for (const transaction of state.data.transactions ?? []) {
-    byIndex.set(transaction.team.index, transaction.team);
+  const spentByIndex = new Map<number, number>();
+  const filledByIndex = new Map<number, FantaAstaRosterHash>();
+
+  for (const tx of state.data.transactions ?? []) {
+    const idx = tx.team.index;
+    spentByIndex.set(idx, (spentByIndex.get(idx) ?? 0) + tx.cost);
+
+    const filled = filledByIndex.get(idx) ?? { gk: 0, def: 0, mid: 0, atk: 0 };
+    const zone = tx.player.zone;
+    if (zone === "gk" || zone === "def" || zone === "mid" || zone === "atk") {
+      filled[zone] += 1;
+    }
+    filledByIndex.set(idx, filled);
   }
 
-  return Array.from(byIndex.values());
+  const baseByIndex = new Map((state.data.teams ?? []).map((t) => [t.index, t]));
+  const allIndices = new Set([...baseByIndex.keys(), ...spentByIndex.keys()]);
+
+  return Array.from(allIndices)
+    .sort((a, b) => a - b)
+    .map((index) => {
+      const base = baseByIndex.get(index);
+      const spent = spentByIndex.get(index) ?? 0;
+      const filled = filledByIndex.get(index) ?? { gk: 0, def: 0, mid: 0, atk: 0 };
+      const rosterHash: FantaAstaRosterHash = {
+        gk: Math.max(0, rosterComposition.gk - filled.gk),
+        def: Math.max(0, rosterComposition.def - filled.def),
+        mid: Math.max(0, rosterComposition.mid - filled.mid),
+        atk: Math.max(0, rosterComposition.atk - filled.atk),
+      };
+      const totalFilled = filled.gk + filled.def + filled.mid + filled.atk;
+      const playersToBuy = Math.max(0, totalRosterSlots - totalFilled);
+      const credits = startingBudget - spent;
+
+      return {
+        index,
+        name: base?.name ?? `Squadra ${index + 1}`,
+        budget: startingBudget,
+        players: [],
+        avatar: base?.avatar,
+        credits,
+        rosterHash,
+        playersToBuy,
+        maxOffer: credits - Math.max(0, playersToBuy - 1),
+      };
+    });
+}
+
+/** Id (FantaAsta) di ogni giocatore che compare in almeno una transazione:
+ * più affidabile del flag players[].sold, visto disallinearsi dal vivo
+ * rispetto agli acquisti realmente registrati nelle transazioni. */
+export function transactedPlayerIds(state: FantaAstaState): Set<number> {
+  return new Set((state.data.transactions ?? []).map((tx) => tx.player.id));
 }

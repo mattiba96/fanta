@@ -13,6 +13,7 @@ import { DEFAULT_STATS_SEASON, HISTORICAL_STATS_SEASONS } from "@/lib/seasons";
 import {
   readFantaAstaState,
   deriveTeams,
+  transactedPlayerIds,
   ZONE_TO_ROLE_CLASSIC,
   type FantaAstaPlayer,
   type FantaAstaRosterHash,
@@ -160,7 +161,13 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
     };
   }
 
-  const availablePlayers = state.data.players.filter((p) => p.sold === false);
+  // players[].sold da solo non è affidabile (visto dal vivo disallinearsi
+  // dalle transazioni reali in entrambe le direzioni): un giocatore è preso
+  // se risulta venduto O se compare in almeno una transazione, a scapito di
+  // qualche falso "non disponibile" — meglio che consigliare un giocatore
+  // già assegnato durante un'asta dal vivo.
+  const takenIds = transactedPlayerIds(state);
+  const availablePlayers = state.data.players.filter((p) => p.sold !== true && !takenIds.has(p.id));
   const externalIds = availablePlayers.map((p) => String(p.id));
 
   const rows =
