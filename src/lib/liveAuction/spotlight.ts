@@ -5,8 +5,15 @@ import { getAdviceForPlayer } from "@/lib/queries/advice";
 import { getPlayerLineupStatus, type PlayerLineupStatus } from "@/lib/queries/lineups";
 import { getTeamSetPieces, type SetPieceEntry } from "@/lib/queries/setPieces";
 import { getNewsForPlayer, type NewsArticle } from "@/lib/queries/news";
+import { getWatchlistEntryForPlayer } from "@/lib/queries/watchlist";
 import { DEFAULT_STATS_SEASON, HISTORICAL_STATS_SEASONS } from "@/lib/seasons";
 import type { Advice } from "@/lib/advice/engine";
+
+export type SpotlightWatchlistEntry = {
+  targetPrice: number | null;
+  priority: number | null;
+  note: string | null;
+};
 
 export type PlayerSpotlight = {
   slug: string;
@@ -24,6 +31,10 @@ export type PlayerSpotlight = {
   lineupStatuses: PlayerLineupStatus[];
   setPieces: SetPieceEntry[];
   news: NewsArticle[];
+  // Non-null quando questo giocatore è presente nella watchlist dell'utente
+  // (players.id in watchlist.player_id): usato in UI per un'evidenziazione
+  // forte quando il giocatore "in visione ora" era un obiettivo segnato.
+  watchlistEntry: SpotlightWatchlistEntry | null;
 };
 
 /**
@@ -58,11 +69,12 @@ export async function getPlayerSpotlight(externalId: string): Promise<PlayerSpot
     .from(historicalAuctionPrices)
     .where(eq(historicalAuctionPrices.playerId, player.id));
 
-  const [advice, lineupStatuses, teamSetPieces, news] = await Promise.all([
+  const [advice, lineupStatuses, teamSetPieces, news, watchlistRow] = await Promise.all([
     getAdviceForPlayer(player.id),
     getPlayerLineupStatus(player.id),
     getTeamSetPieces(player.teamId!),
     getNewsForPlayer(player.name),
+    getWatchlistEntryForPlayer(player.id),
   ]);
 
   return {
@@ -81,5 +93,8 @@ export async function getPlayerSpotlight(externalId: string): Promise<PlayerSpot
     lineupStatuses,
     setPieces: teamSetPieces.filter((sp) => sp.playerId === player.id),
     news,
+    watchlistEntry: watchlistRow
+      ? { targetPrice: watchlistRow.targetPrice, priority: watchlistRow.priority, note: watchlistRow.note }
+      : null,
   };
 }

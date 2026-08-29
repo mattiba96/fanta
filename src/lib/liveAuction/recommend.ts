@@ -50,7 +50,64 @@ export type LiveAdvice = {
     zone: FantaAstaPlayer["zone"];
   };
   advice: Advice;
+  // suggestedPrice puro FVM * roleInflationFactor del ruolo (vedi
+  // marketTrend più sotto): null quando suggestedPrice stesso è null. Questo
+  // è il prezzo usato per "affordable" e per i confronti nel verdetto —
+  // advice.suggestedPrice resta invariato per mostrare sempre anche il dato
+  // FVM puro.
+  adjustedPrice: number | null;
   affordable: boolean;
+};
+
+// Quanto il mercato di QUESTA asta si sta discostando dalla formula FVM per
+// ciascun ruolo: factor = media di (costo realmente pagato / prezzo che la
+// formula avrebbe suggerito per quel giocatore) sulle transazioni già
+// avvenute in questa asta con un prezzo suggerito valido; 1 = nessun
+// aggiustamento (ruolo senza abbastanza transazioni valide per fidarsi).
+export type MarketTrendInfo = {
+  factor: number;
+  sampleSize: number;
+};
+
+// Quante squadre (tra le "altre") possono ancora competere per il ruolo del
+// giocatore attualmente in visione: hanno slot liberi in quel ruolo E
+// credits sufficienti per un'offerta minima.
+export type CompetingTeamsInfo = {
+  canStillBid: number;
+  total: number;
+  message: string;
+};
+
+// Confronto tra quanto budget ho già speso e quanti slot ho già riempito per
+// la mia squadra: un forte scarto tra i due segnala un ritmo di spesa
+// squilibrato rispetto agli slot rimanenti. Le percentuali sono frazioni
+// 0..1 (stessa convenzione di RoleBudgetInfo.share).
+export type SpendingPaceInfo = {
+  budgetSpentPct: number;
+  slotsFilledPct: number;
+  message: string | null;
+};
+
+// Backend stateless: nessuna chiamata "ricorda" quella precedente, quindi
+// "cosa è cambiato dall'ultimo poll" (per i commenti automatici post-acquisto
+// lato client) va rilevato confrontando gli id qui esposti tra un poll e il
+// successivo. id è l'id transazione di FantaAsta (stabile e univoco).
+// wasRecommended/wasTopPick/suggestedPrice sono ricostruiti con la STESSA
+// logica di marketTrend sopra: un mini-gruppo "giocatore venduto + suoi pari
+// ruolo ancora disponibili ORA" (non al momento reale della vendita, che non
+// abbiamo modo di ricostruire senza tenere uno storico dei gruppi nel tempo).
+// È quindi un'approssimazione che degrada in modo prevedibile quando il
+// ruolo è quasi esaurito (pochi pari rimasti con cui confrontarsi, più
+// facile risultare "il migliore libero" per pura scarsità di alternative).
+export type RecentTransactionInfo = {
+  id: number;
+  playerName: string;
+  teamName: string;
+  cost: number;
+  role: Role | null;
+  wasRecommended: boolean;
+  wasTopPick: boolean;
+  suggestedPrice: number | null;
 };
 
 // Budget "reattivo" di reparto: quanto dovrebbe valere il ruolo (share del
@@ -78,13 +135,31 @@ export type LiveAuctionSnapshot = {
   otherTeams: FantaAstaTeamSnapshot[];
   bestPicksByRole: Record<Role, LiveAdvice[]>;
   roleBudget: Record<Role, RoleBudgetInfo>;
+  marketTrend: Record<Role, MarketTrendInfo>;
   selectedPlayer: PlayerSpotlight | null;
   verdict: Verdict | null;
+  // Null quando non c'è un giocatore in visione con ruolo riconosciuto (es.
+  // asta non ancora iniziata): non legato alla presenza di un verdict (che
+  // richiede anche selected.advice), solo al ruolo del giocatore selezionato.
+  competingTeams: CompetingTeamsInfo | null;
+  spendingPace: SpendingPaceInfo;
+  recentTransactions: RecentTransactionInfo[];
 };
 
 // Non serve mostrare più di questo per ruolo: la lista è comunque ordinata
 // per punteggio, quindi i migliori restano sempre in cima.
 const MAX_PICKS_PER_ROLE = 30;
+
+// A fine asta le transazioni totali possono arrivare a qualche centinaio: il
+// client si accorge comunque di ogni nuova vendita ad ogni poll (4s), non
+// serve esporre l'intera storia per confrontare "cosa è cambiato dall'ultimo
+// poll" — solo le più recenti.
+const RECENT_TRANSACTIONS_LIMIT = 20;
+
+// Soglia per "era tra i consigliati" nel commento post-acquisto: stesso
+// criterio del taglio mostrato in bestPicksByRole (i migliori restano in
+// cima alla lista ordinata per punteggio).
+const TOP_N_FOR_RECOMMENDED = 5;
 
 const ROLE_LIST = Object.keys(ROLE_TO_ZONE) as Role[];
 
@@ -114,6 +189,27 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
     def: rosterComposition.def,
     mid: rosterComposition.mid,
     atk: rosterComposition.atk,
+  };
+
+  // Ritmo di spesa: confronta quanto budget ho già bruciato con quanti slot
+  // ho già riempito. Stessi default usati sopra per il caso "asta appena
+  // iniziata, ancora nessun acquisto mio" (myTeam null): 0% speso, 0% slot
+  // riempiti, ritmo per definizione equilibrato.
+  const effectiveCredits = myTeam?.credits ?? state.data.settings.startingBudget;
+  const effectivePlayersToBuy = myTeam?.playersToBuy ?? totalRosterSlots;
+  const budgetSpentPct = 1 - effectiveCredits / state.data.settings.startingBudget;
+  const slotsFilledPct = 1 - effectivePlayersToBuy / totalRosterSlots;
+  const spendingPaceDiff = budgetSpentPct - slotsFilledPct;
+  const SPENDING_PACE_MARGIN = 0.15;
+  const spendingPace: SpendingPaceInfo = {
+    budgetSpentPct,
+    slotsFilledPct,
+    message:
+      spendingPaceDiff > SPENDING_PACE_MARGIN
+        ? "Stai spendendo più in fretta di quanto riempi la rosa: attenzione al budget per gli slot rimanenti."
+        : spendingPaceDiff < -SPENDING_PACE_MARGIN
+          ? "Stai riempiendo la rosa più in fretta di quanto spendi: hai margine per spendere di più sui prossimi acquisti."
+          : null,
   };
 
   // Quote di budget per reparto scelte dall'utente in base alla sua
@@ -175,7 +271,15 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
   // già assegnato durante un'asta dal vivo.
   const takenIds = transactedPlayerIds(state);
   const availablePlayers = state.data.players.filter((p) => p.sold !== true && !takenIds.has(p.id));
-  const externalIds = availablePlayers.map((p) => String(p.id));
+
+  // Per i "prezzi reattivi" (marketTrend, sotto) serve anche il dato DB dei
+  // giocatori GIÀ transati in questa asta, non solo quelli ancora
+  // disponibili: la query sotto quindi copre l'unione dei due insiemi, così
+  // da fare un solo giro di query invece di duplicarle.
+  const transactions = state.data.transactions ?? [];
+  const externalIds = Array.from(
+    new Set([...availablePlayers.map((p) => String(p.id)), ...transactions.map((tx) => String(tx.player.id))]),
+  );
 
   const rows =
     externalIds.length === 0
@@ -255,6 +359,27 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
 
   const dbRowByExternalId = new Map(rows.map((r) => [r.externalId, r]));
 
+  // Estratto in funzione perché serve in due punti: per costruire il gruppo
+  // dei disponibili (sotto) e per costruire, a parte, l'AdviceInput di un
+  // giocatore GIÀ transato quando calcoliamo cosa la formula avrebbe
+  // suggerito per lui (marketTrend, sotto).
+  const toAdviceInput = (dbRow: (typeof rows)[number], role: Role): AdviceInput => ({
+    playerId: dbRow.id,
+    role,
+    quotCurrentClassic: dbRow.quotCurrentClassic,
+    fvmClassic: dbRow.fvmClassic,
+    pv: dbRow.pv,
+    mv: dbRow.mv,
+    fm: dbRow.fm,
+    goals: dbRow.goals,
+    assists: dbRow.assists,
+    yellowCards: dbRow.yellowCards,
+    redCards: dbRow.redCards,
+    setPiece: setPieceByPlayer.get(dbRow.id) ?? {},
+    lineupStatuses: lineupByPlayer.get(dbRow.id) ?? [],
+    historicalFm: historicalFmByPlayer.get(dbRow.id) ?? [],
+  });
+
   const grouped = EMPTY_ROLE_RECORD<{ input: AdviceInput; fantaAstaPlayer: FantaAstaPlayer; slug: string }>();
 
   for (const fap of availablePlayers) {
@@ -263,23 +388,87 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
     const role = ZONE_TO_ROLE_CLASSIC[fap.zone];
     if (!role) continue;
 
-    const input: AdviceInput = {
-      playerId: dbRow.id,
+    grouped[role].push({ input: toAdviceInput(dbRow, role), fantaAstaPlayer: fap, slug: dbRow.slug });
+  }
+
+  // Prezzi reattivi: per ogni transazione già avvenuta in QUESTA asta,
+  // calcola cosa la formula FVM avrebbe suggerito per quel giocatore se
+  // fosse ancora disponibile (mini-gruppo: lui + i suoi pari ruolo tra i
+  // disponibili), poi confronta col prezzo REALMENTE pagato. roleInflation
+  // è la media di questo rapporto per ruolo, usata sotto per adjustedPrice.
+  const inflationRatiosByRole: Record<Role, number[]> = { P: [], D: [], C: [], A: [] };
+  const recentTransactionsAll: RecentTransactionInfo[] = [];
+  for (const tx of transactions) {
+    const role = ZONE_TO_ROLE_CLASSIC[tx.player.zone] ?? null;
+    const dbRow = role ? dbRowByExternalId.get(String(tx.player.id)) : undefined;
+
+    let wasRecommended = false;
+    let wasTopPick = false;
+    let suggestedPriceForTx: number | null = null;
+
+    if (role && dbRow) {
+      const soldInput = toAdviceInput(dbRow, role);
+      const peers = grouped[role].map((g) => g.input);
+      const miniGroupAdvice = buildAdviceForRoleGroup([soldInput, ...peers], state.data.settings.startingBudget);
+      const soldAdvice = miniGroupAdvice.get(soldInput.playerId)!;
+      const formulaPrice = soldAdvice.suggestedPrice;
+      suggestedPriceForTx = formulaPrice;
+
+      if (formulaPrice != null && Number.isFinite(formulaPrice) && formulaPrice > 0) {
+        inflationRatiosByRole[role].push(tx.cost / formulaPrice);
+      }
+
+      // Rank per punteggio nel mini-gruppo (0 = migliore): conta quanti pari
+      // ruolo hanno un punteggio strettamente più alto, invece di ordinare
+      // l'intero gruppo — evita di materializzare/ordinare l'array per ogni
+      // singola transazione.
+      const rank = Array.from(miniGroupAdvice.values()).filter((a) => a.score > soldAdvice.score).length;
+      wasTopPick = rank === 0;
+      wasRecommended = rank < TOP_N_FOR_RECOMMENDED;
+    }
+
+    recentTransactionsAll.push({
+      id: tx.id,
+      playerName: tx.player.name,
+      teamName: tx.team.name,
+      cost: tx.cost,
       role,
-      quotCurrentClassic: dbRow.quotCurrentClassic,
-      fvmClassic: dbRow.fvmClassic,
-      pv: dbRow.pv,
-      mv: dbRow.mv,
-      fm: dbRow.fm,
-      goals: dbRow.goals,
-      assists: dbRow.assists,
-      yellowCards: dbRow.yellowCards,
-      redCards: dbRow.redCards,
-      setPiece: setPieceByPlayer.get(dbRow.id) ?? {},
-      lineupStatuses: lineupByPlayer.get(dbRow.id) ?? [],
-      historicalFm: historicalFmByPlayer.get(dbRow.id) ?? [],
+      wasRecommended,
+      wasTopPick,
+      suggestedPrice: suggestedPriceForTx,
+    });
+  }
+
+  // Ordinate per id (assunto crescente nel tempo, come tipico di un id
+  // transazione) invece di fidarsi dell'ordine di stato.data.transactions:
+  // solo le più recenti servono al client per il confronto "cosa è cambiato
+  // dall'ultimo poll".
+  const recentTransactions = recentTransactionsAll
+    .slice()
+    .sort((a, b) => a.id - b.id)
+    .slice(-RECENT_TRANSACTIONS_LIMIT);
+
+  // Sotto le 4 transazioni valide il fattore non è affidabile: si lascia a 1
+  // (nessun aggiustamento) invece di derivare un trend da un campione troppo
+  // piccolo. Si usa la MEDIANA (non la media) dei rapporti: con la media,
+  // una coppia di vendite atipiche (es. due riserve svendute a inizio asta)
+  // può da sola spostare il fattore per l'intero ruolo senza alcuna
+  // protezione dagli outlier; la mediana pesa molto meno un singolo dato
+  // estremo.
+  const MIN_SAMPLE_FOR_MARKET_TREND = 4;
+  const median = (values: number[]): number => {
+    const sorted = values.slice().sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 !== 0 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+  };
+  const marketTrend = {} as Record<Role, MarketTrendInfo>;
+  for (const role of ROLE_LIST) {
+    const ratios = inflationRatiosByRole[role];
+    const sampleSize = ratios.length;
+    marketTrend[role] = {
+      factor: sampleSize >= MIN_SAMPLE_FOR_MARKET_TREND ? median(ratios) : 1,
+      sampleSize,
     };
-    grouped[role].push({ input, fantaAstaPlayer: fap, slug: dbRow.slug });
   }
 
   const bestPicksByRole = EMPTY_ROLE_RECORD<LiveAdvice>();
@@ -302,8 +491,9 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
 
     const list: LiveAdvice[] = group.map(({ input, fantaAstaPlayer, slug }) => {
       const advice = adviceMap.get(input.playerId)!;
-      const affordable =
-        advice.suggestedPrice == null || advice.suggestedPrice <= roleBudget[role].maxOfferForRole;
+      const adjustedPrice =
+        advice.suggestedPrice != null ? Math.round(advice.suggestedPrice * marketTrend[role].factor) : null;
+      const affordable = adjustedPrice == null || adjustedPrice <= roleBudget[role].maxOfferForRole;
 
       return {
         player: {
@@ -316,6 +506,7 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
           zone: fantaAstaPlayer.zone,
         },
         advice,
+        adjustedPrice,
         affordable,
       };
     });
@@ -340,8 +531,29 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
           bestPicksByRole[selectedRole].filter((p) => p.player.slug !== selectedPlayer.slug),
           roleBudget[selectedRole],
           roleHistoricalMax[selectedRole] ?? null,
+          marketTrend[selectedRole],
         )
       : null;
+
+  // Scouting avversari: quante delle ALTRE squadre sono ancora "in gioco" per
+  // il ruolo del giocatore in visione (slot liberi in quel ruolo E credits
+  // sufficienti per un'offerta minima) contro quante sono già "sazie". Non
+  // dipende dal verdetto (che richiede anche selected.advice): basta
+  // conoscere il ruolo del giocatore selezionato.
+  const competingTeams: CompetingTeamsInfo | null = selectedRole
+    ? (() => {
+        const zone = ROLE_TO_ZONE[selectedRole];
+        const total = otherTeams.length;
+        const canStillBid = otherTeams.filter(
+          (t) => t.rosterHash[zone] > 0 && (t.maxOffer ?? 0) > 0,
+        ).length;
+        return {
+          canStillBid,
+          total,
+          message: `${canStillBid} squadre su ${total} possono ancora puntare su questo ruolo`,
+        };
+      })()
+    : null;
 
   return {
     settings: state.data.settings,
@@ -349,8 +561,12 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
     otherTeams,
     bestPicksByRole,
     roleBudget,
+    marketTrend,
     selectedPlayer,
     verdict,
+    competingTeams,
+    spendingPace,
+    recentTransactions,
   };
 }
 
@@ -364,6 +580,7 @@ function buildVerdict(
   alternatives: LiveAdvice[],
   budget: RoleBudgetInfo,
   roleHistoricalMax: number | null,
+  marketTrend: MarketTrendInfo,
 ): Verdict | null {
   if (!selected.advice) return null;
   const { suggestedPrice: fvmPrice } = selected.advice;
@@ -380,10 +597,18 @@ function buildVerdict(
       : null;
 
   // Ci fidiamo dello storico solo quando diverge MOLTO dalla formula (la
-  // formula ha chiaramente premiato una stagione outlier): altrimenti, con
-  // uno storico vicino alla formula o assente, resta la formula FVM.
+  // formula ha chiaramente premiato una stagione outlier): il confronto usa
+  // il prezzo FVM puro (non quello aggiustato sotto), perché qui si valuta
+  // uno scarto di carriera, non l'andamento di QUESTA asta. Altrimenti, con
+  // uno storico vicino alla formula o assente, resta la formula FVM — ma
+  // moltiplicata per marketTrend.factor: senza questo aggiustamento
+  // referencePrice resterebbe un prezzo "di formula" mentre alternatives
+  // sotto usa adjustedPrice (già moltiplicato per lo stesso factor), col
+  // rischio di confrontare due basi di prezzo incoerenti tra loro e col
+  // budget di reparto.
   const priceDivergesALot = historicalAvg != null && fvmPrice != null && fvmPrice > historicalAvg * 1.8;
-  let referencePrice = priceDivergesALot ? historicalAvg : (fvmPrice ?? historicalAvg);
+  const adjustedFvmPrice = fvmPrice != null ? Math.round(fvmPrice * marketTrend.factor) : null;
+  let referencePrice = priceDivergesALot ? historicalAvg : (adjustedFvmPrice ?? historicalAvg);
 
   // Tetto di realtà indipendente dal singolo giocatore: anche senza storico
   // player-specific, il prezzo di riferimento non dovrebbe mai sforare di
@@ -433,15 +658,17 @@ function buildVerdict(
   const sameBand = alternatives.filter((a) => a.advice.band === selected.advice!.band);
   const higherBand = alternatives.filter((a) => BAND_RANK[a.advice.band] > BAND_RANK[selected.advice!.band]);
 
+  // adjustedPrice (non suggestedPrice puro) per riflettere come sta andando
+  // QUESTA asta: un'alternativa "a meno" lo è per il mercato reale osservato
+  // finora in questo ruolo, non solo per la formula FVM in isolamento.
   const similarCheaper = sameBand.find(
-    (a) =>
-      referencePrice != null && a.advice.suggestedPrice != null && a.advice.suggestedPrice < referencePrice - 3,
+    (a) => referencePrice != null && a.adjustedPrice != null && a.adjustedPrice < referencePrice - 3,
   );
   if (similarCheaper) {
     return {
       action: "aspetta",
       headline: "Puoi aspettare",
-      detail: `${similarCheaper.player.name} è nella stessa fascia (${bandLabel(similarCheaper.advice.band)}) probabilmente a un prezzo più basso (~${similarCheaper.advice.suggestedPrice}).`,
+      detail: `${similarCheaper.player.name} è nella stessa fascia (${bandLabel(similarCheaper.advice.band)}) probabilmente a un prezzo più basso (~${similarCheaper.adjustedPrice}).`,
       ceiling,
     };
   }

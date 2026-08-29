@@ -4,7 +4,15 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { launchFantaAstaDesktop } from "@/actions/liveAuction";
 import type { Role } from "@/lib/advice/engine";
-import type { LiveAdvice, LiveAuctionSnapshot, RoleBudgetInfo, Verdict } from "@/lib/liveAuction/recommend";
+import type {
+  CompetingTeamsInfo,
+  LiveAdvice,
+  LiveAuctionSnapshot,
+  MarketTrendInfo,
+  RecentTransactionInfo,
+  RoleBudgetInfo,
+  Verdict,
+} from "@/lib/liveAuction/recommend";
 import type { FantaAstaTeamSnapshot } from "@/lib/liveAuction/fantaAstaReader";
 import type { PlayerSpotlight } from "@/lib/liveAuction/spotlight";
 import { bandLabel } from "@/lib/advice/engine";
@@ -33,6 +41,80 @@ const BAND_LABELS: Record<string, string> = {
   scommessa: "Scommessa",
 };
 
+// Commenti automatici post-acquisto (feature 5): mostrate solo le ultime N,
+// si resettano al refresh della pagina (nessuna persistenza voluta).
+const MAX_PURCHASE_NOTIFICATIONS = 5;
+// "vicino o sotto il consigliato" / "supera parecchio il consigliato": margini
+// arbitrari ma coerenti con quelli già usati altrove nel file (es. verdetto).
+const GOOD_DEAL_MARGIN = 1.1;
+const OVERPAID_MARGIN = 1.5;
+
+type PurchaseNotificationKind = "buon-colpo" | "pagato-troppo" | "occasione-persa" | "neutro";
+
+type PurchaseNotification = {
+  id: number;
+  isMine: boolean;
+  kind: PurchaseNotificationKind;
+  message: string;
+};
+
+const NOTIFICATION_STYLES: Record<PurchaseNotificationKind, string> = {
+  "buon-colpo":
+    "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-300",
+  "pagato-troppo": "border-red-200 bg-red-50 text-red-800 dark:border-red-900/40 dark:bg-red-950/30 dark:text-red-300",
+  "occasione-persa":
+    "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-300",
+  neutro: "border-zinc-200 bg-white text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300",
+};
+const NOTIFICATION_ICONS: Record<PurchaseNotificationKind, string> = {
+  "buon-colpo": "👍",
+  "pagato-troppo": "💸",
+  "occasione-persa": "😬",
+  neutro: "🛒",
+};
+
+// Stesso criterio di normalizzazione usato lato server (buildLiveAuctionSnapshot)
+// per far corrispondere il nome squadra dell'utente a quello registrato in FantaAsta.
+function isMyTeam(teamName: string, myTeamName: string): boolean {
+  return teamName.trim().toLowerCase() === myTeamName.trim().toLowerCase();
+}
+
+function buildPurchaseNotification(tx: RecentTransactionInfo, myTeamName: string): PurchaseNotification {
+  const isMine = isMyTeam(tx.teamName, myTeamName);
+  const roleLabel = tx.role ? ROLE_LABELS[tx.role].toLowerCase() : "questo ruolo";
+
+  if (!isMine && tx.wasTopPick) {
+    return {
+      id: tx.id,
+      isMine,
+      kind: "occasione-persa",
+      message: `Occasione persa: ${tx.playerName} (era il migliore libero per ${roleLabel}) preso da ${tx.teamName}.`,
+    };
+  }
+  if (tx.suggestedPrice != null && tx.cost > tx.suggestedPrice * OVERPAID_MARGIN) {
+    return {
+      id: tx.id,
+      isMine,
+      kind: "pagato-troppo",
+      message: `Pagato più del dovuto: ${tx.playerName} a ${tx.cost}, il consigliato era ${tx.suggestedPrice}.`,
+    };
+  }
+  if (tx.wasRecommended && tx.suggestedPrice != null && tx.cost <= tx.suggestedPrice * GOOD_DEAL_MARGIN) {
+    return {
+      id: tx.id,
+      isMine,
+      kind: "buon-colpo",
+      message: `Buon colpo: ${tx.playerName} preso a ${tx.cost}, era tra i consigliati.`,
+    };
+  }
+  return {
+    id: tx.id,
+    isMine,
+    kind: "neutro",
+    message: `${tx.playerName} preso da ${tx.teamName} per ${tx.cost} crediti.`,
+  };
+}
+
 type ErrorSource = "fantaasta" | "internal" | "input" | "unsupported-environment";
 type ApiResponse = LiveAuctionSnapshot | { error: string; source?: ErrorSource };
 
@@ -54,6 +136,12 @@ export default function AstaLivePage() {
   // (rete lenta/variabile, o cambio rapido di myTeamIndex): senza questo,
   // fetch fuori ordine potrebbero sovrascrivere lo stato con dati stale.
   const requestSeqRef = useRef(0);
+  const [notifications, setNotifications] = useState<PurchaseNotification[]>([]);
+  // null finché non arriva il primo snapshot della sessione: le transazioni
+  // già presenti in quel primo snapshot sono storia pregressa (asta magari
+  // già in corso da tempo), non "nuovi acquisti" da notificare — servono
+  // solo a inizializzare il set di riferimento.
+  const seenTransactionIdsRef = useRef<Set<number> | null>(null);
 
   // La preferenza va letta da localStorage prima del primo poll, altrimenti
   // partiremmo sempre col nome di default e poi "salteremmo" al valore salvato.
@@ -101,6 +189,27 @@ export default function AstaLivePage() {
     return () => clearInterval(id);
   }, [prefsReady, myTeamName, fetchState]);
 
+  // Rilevamento "cosa è cambiato dall'ultimo poll" (backend stateless, non
+  // tiene memoria delle chiamate precedenti): confronta gli id delle
+  // transazioni recenti esposte dallo snapshot con l'ultimo set visto.
+  useEffect(() => {
+    if (!snapshot) return;
+    const recent = snapshot.recentTransactions;
+
+    if (seenTransactionIdsRef.current === null) {
+      seenTransactionIdsRef.current = new Set(recent.map((tx) => tx.id));
+      return;
+    }
+
+    const seen = seenTransactionIdsRef.current;
+    const freshlyNew = recent.filter((tx) => !seen.has(tx.id));
+    if (freshlyNew.length === 0) return;
+    for (const tx of freshlyNew) seen.add(tx.id);
+
+    const newNotifications = freshlyNew.map((tx) => buildPurchaseNotification(tx, myTeamName));
+    setNotifications((prev) => [...newNotifications.reverse(), ...prev].slice(0, MAX_PURCHASE_NOTIFICATIONS));
+  }, [snapshot, myTeamName]);
+
   const handleLaunch = () => {
     setJustLaunched(false);
     setLaunchOutcome(null);
@@ -132,6 +241,8 @@ export default function AstaLivePage() {
           </Link>
         </div>
       </header>
+
+      <PurchaseNotifications notifications={notifications} />
 
       {loading && !snapshot && !errorMessage && (
         <p className="text-sm text-zinc-500 dark:text-zinc-400">Caricamento...</p>
@@ -173,10 +284,19 @@ export default function AstaLivePage() {
         <>
           <TeamSummary snapshot={snapshot} />
           <OtherTeamsRecap teams={snapshot.otherTeams} />
-          <SelectedPlayerSpotlight player={snapshot.selectedPlayer} verdict={snapshot.verdict} />
+          <SelectedPlayerSpotlight
+            player={snapshot.selectedPlayer}
+            verdict={snapshot.verdict}
+            competingTeams={snapshot.competingTeams}
+          />
           <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
             {ROLE_ORDER.map((role) => (
-              <RoleSection key={role} role={role} picks={snapshot.bestPicksByRole[role]} />
+              <RoleSection
+                key={role}
+                role={role}
+                picks={snapshot.bestPicksByRole[role]}
+                trend={snapshot.marketTrend[role]}
+              />
             ))}
           </div>
         </>
@@ -185,8 +305,32 @@ export default function AstaLivePage() {
   );
 }
 
+// Le notifiche più recenti in cima (unshift già fatto sopra con reverse()),
+// max MAX_PURCHASE_NOTIFICATIONS: nessuna persistenza, si resettano al refresh
+// (seenTransactionIdsRef/notifications sono solo stato React in memoria).
+function PurchaseNotifications({ notifications }: { notifications: PurchaseNotification[] }) {
+  if (notifications.length === 0) return null;
+
+  return (
+    <div className="mb-6 space-y-2">
+      {notifications.map((n) => (
+        <div
+          key={n.id}
+          className={`flex items-start gap-2 rounded-md border px-3 py-2 text-sm ${NOTIFICATION_STYLES[n.kind]}`}
+        >
+          <span aria-hidden>{NOTIFICATION_ICONS[n.kind]}</span>
+          <p className="flex-1">{n.message}</p>
+          <span className="shrink-0 rounded-full bg-black/5 px-2 py-0.5 text-xs font-medium dark:bg-white/10">
+            {n.isMine ? "Tu" : "Avversari"}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function TeamSummary({ snapshot }: { snapshot: LiveAuctionSnapshot }) {
-  const { myTeam, settings, roleBudget } = snapshot;
+  const { myTeam, settings, roleBudget, spendingPace } = snapshot;
   const budget = myTeam?.credits ?? myTeam?.budget ?? settings.startingBudget;
   const slots = myTeam?.rosterHash ?? {
     gk: settings.rosterComposition.gk,
@@ -229,6 +373,11 @@ function TeamSummary({ snapshot }: { snapshot: LiveAuctionSnapshot }) {
           roleBudget={roleBudget.A}
         />
       </div>
+      {spendingPace.message && (
+        <p className="mt-3 text-xs font-medium text-amber-700 dark:text-amber-400">
+          ⚡ {spendingPace.message}
+        </p>
+      )}
     </section>
   );
 }
@@ -278,9 +427,11 @@ const VERDICT_STYLES: Record<Verdict["action"], string> = {
 function SelectedPlayerSpotlight({
   player,
   verdict,
+  competingTeams,
 }: {
   player: PlayerSpotlight | null;
   verdict: Verdict | null;
+  competingTeams: CompetingTeamsInfo | null;
 }) {
   if (!player) return null;
 
@@ -292,13 +443,28 @@ function SelectedPlayerSpotlight({
       <h2 className="mb-1 flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
         🔎 In visione ora
       </h2>
+      {player.watchlistEntry && (
+        <div className="mb-3 rounded-md border-2 border-violet-400 bg-violet-50 px-3 py-2 text-sm text-violet-900 dark:border-violet-600 dark:bg-violet-950/40 dark:text-violet-200">
+          <p className="font-semibold">⭐ Obiettivo in watchlist</p>
+          <p>
+            {player.watchlistEntry.targetPrice != null && `Prezzo obiettivo: ${player.watchlistEntry.targetPrice} crediti`}
+            {player.watchlistEntry.priority != null && ` · Priorità ${player.watchlistEntry.priority}`}
+          </p>
+          {player.watchlistEntry.note && <p className="mt-0.5 italic">"{player.watchlistEntry.note}"</p>}
+        </div>
+      )}
       {verdict && (
-        <div className={`mb-3 rounded-md px-3 py-2 text-sm ${VERDICT_STYLES[verdict.action]}`}>
+        <div className={`mb-1 rounded-md px-3 py-2 text-sm ${VERDICT_STYLES[verdict.action]}`}>
           <p className="font-semibold">
             {verdict.action === "punta" ? "✅" : verdict.action === "aspetta" ? "⏸️" : "⚠️"} {verdict.headline}
           </p>
           <p>{verdict.detail}</p>
         </div>
+      )}
+      {competingTeams && (
+        <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
+          🔭 {competingTeams.message}
+        </p>
       )}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -389,12 +555,21 @@ function Stat({
   );
 }
 
-function RoleSection({ role, picks }: { role: Role; picks: LiveAdvice[] }) {
+function RoleSection({ role, picks, trend }: { role: Role; picks: LiveAdvice[]; trend: MarketTrendInfo }) {
+  const trendPct = Math.round((trend.factor - 1) * 100);
+  const trendLabel =
+    trendPct !== 0
+      ? `${ROLE_LABELS[role].toLowerCase()}: ${trendPct > 0 ? "+" : ""}${trendPct}% rispetto al previsto in questa asta`
+      : null;
+
   return (
     <section className="rounded-md border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-900">
-      <h2 className="mb-3 flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+      <h2 className={`flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50 ${trendLabel ? "mb-1" : "mb-3"}`}>
         <span aria-hidden>{ROLE_ICONS[role]}</span> {ROLE_LABELS[role]}
       </h2>
+      {trendLabel && (
+        <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">📈 {trendLabel}</p>
+      )}
       {picks.length === 0 ? (
         <p className="text-sm text-zinc-400">Nessun giocatore disponibile.</p>
       ) : (
@@ -416,6 +591,11 @@ function RoleSection({ role, picks }: { role: Role; picks: LiveAdvice[] }) {
                 </p>
               </div>
               <div className="shrink-0 text-right">
+                {pick.adjustedPrice != null &&
+                  pick.advice.suggestedPrice != null &&
+                  pick.adjustedPrice !== pick.advice.suggestedPrice && (
+                    <p className="text-xs text-zinc-400 line-through">{pick.advice.suggestedPrice}</p>
+                  )}
                 <p
                   className={
                     pick.affordable
@@ -424,7 +604,7 @@ function RoleSection({ role, picks }: { role: Role; picks: LiveAdvice[] }) {
                   }
                 >
                   {!pick.affordable && <span aria-hidden>⚠️ </span>}
-                  {pick.advice.suggestedPrice ?? "—"}
+                  {pick.adjustedPrice ?? pick.advice.suggestedPrice ?? "—"}
                 </p>
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">consigliato</p>
               </div>
