@@ -308,7 +308,9 @@ function RoleSection({ role, picks }: { role: Role; picks: LiveAdvice[] }) {
             <li key={pick.player.id} className="flex items-center justify-between gap-3 py-2">
               <div className="min-w-0">
                 <p className="truncate font-medium text-zinc-900 dark:text-zinc-50">
-                  {pick.player.name}
+                  <Link href={`/giocatori/${pick.player.slug}`} target="_blank" className="hover:underline">
+                    {pick.player.name}
+                  </Link>
                   <span className="ml-2 text-xs font-normal text-zinc-500 dark:text-zinc-400">
                     {pick.player.team ?? "—"}
                   </span>

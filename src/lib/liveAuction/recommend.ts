@@ -35,6 +35,7 @@ export type LiveAdvice = {
   player: {
     id: number;
     externalId: string;
+    slug: string;
     name: string;
     team: string | null;
     roleClassic: Role;
@@ -68,11 +69,6 @@ export type LiveAuctionSnapshot = {
 // per punteggio, quindi i migliori restano sempre in cima.
 const MAX_PICKS_PER_ROLE = 30;
 
-// Quando il FVM totale di un ruolo risulta 0 (nessun dato disponibile), non
-// possiamo calcolarne la quota reale: usiamo una quota di ripiego uguale per
-// tutti i ruoli invece di dividere per zero.
-const ROLE_BUDGET_FALLBACK_SHARE = 0.25;
-
 const ROLE_LIST = Object.keys(ROLE_TO_ZONE) as Role[];
 
 const EMPTY_ROLE_RECORD = <T>(): Record<Role, T[]> => ({ P: [], D: [], C: [], A: [] });
@@ -103,31 +99,11 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
     atk: rosterComposition.atk,
   };
 
-  // Quota di budget "che dovrebbe" andare a ciascun ruolo: calcolata dai dati
-  // reali della stagione (FVM sui giocatori attivi, fallback alla quotazione
-  // corrente se l'FVM manca), non da percentuali fisse — così si adatta da
-  // sola stagione per stagione.
-  const roleFvmRows = await db
-    .select({
-      roleClassic: players.roleClassic,
-      fvmClassic: players.fvmClassic,
-      quotCurrentClassic: players.quotCurrentClassic,
-    })
-    .from(players)
-    .where(eq(players.isActive, 1));
-
-  const fvmSumByRole: Record<Role, number> = { P: 0, D: 0, C: 0, A: 0 };
-  for (const r of roleFvmRows) {
-    const role = r.roleClassic as Role | null;
-    if (!role || !(role in fvmSumByRole)) continue;
-    fvmSumByRole[role] += r.fvmClassic ?? r.quotCurrentClassic ?? 0;
-  }
-  const totalFvm = ROLE_LIST.reduce((sum, role) => sum + fvmSumByRole[role], 0);
-  const roleShare: Record<Role, number> = { P: 0, D: 0, C: 0, A: 0 };
-  for (const role of ROLE_LIST) {
-    roleShare[role] =
-      fvmSumByRole[role] > 0 ? fvmSumByRole[role] / totalFvm : ROLE_BUDGET_FALLBACK_SHARE;
-  }
+  // Quote di budget per reparto scelte dall'utente in base alla sua
+  // strategia dichiarata (portiere top, difesa low cost/bonus, centrocampo
+  // super-top, attacco 2 semitop + 1 discreto) — non una quota di mercato
+  // neutra: P e C sopra la quota che avrebbero per solo valore FVM, D sotto.
+  const roleShare: Record<Role, number> = { P: 0.08, D: 0.12, C: 0.45, A: 0.35 };
 
   // Quanto la mia squadra ha già speso per ruolo finora: stesso criterio di
   // corrispondenza usato sopra per individuare myTeam (nome normalizzato),
@@ -177,6 +153,7 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
           .select({
             id: players.id,
             externalId: players.externalId,
+            slug: players.slug,
             quotCurrentClassic: players.quotCurrentClassic,
             fvmClassic: players.fvmClassic,
             pv: playerSeasonStats.pv,
@@ -247,7 +224,7 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
 
   const dbRowByExternalId = new Map(rows.map((r) => [r.externalId, r]));
 
-  const grouped = EMPTY_ROLE_RECORD<{ input: AdviceInput; fantaAstaPlayer: FantaAstaPlayer }>();
+  const grouped = EMPTY_ROLE_RECORD<{ input: AdviceInput; fantaAstaPlayer: FantaAstaPlayer; slug: string }>();
 
   for (const fap of availablePlayers) {
     const dbRow = dbRowByExternalId.get(String(fap.id));
@@ -271,7 +248,7 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
       lineupStatuses: lineupByPlayer.get(dbRow.id) ?? [],
       historicalFm: historicalFmByPlayer.get(dbRow.id) ?? [],
     };
-    grouped[role].push({ input, fantaAstaPlayer: fap });
+    grouped[role].push({ input, fantaAstaPlayer: fap, slug: dbRow.slug });
   }
 
   const bestPicksByRole = EMPTY_ROLE_RECORD<LiveAdvice>();
@@ -292,7 +269,7 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
       state.data.settings.startingBudget,
     );
 
-    const list: LiveAdvice[] = group.map(({ input, fantaAstaPlayer }) => {
+    const list: LiveAdvice[] = group.map(({ input, fantaAstaPlayer, slug }) => {
       const advice = adviceMap.get(input.playerId)!;
       const affordable =
         advice.suggestedPrice == null || advice.suggestedPrice <= roleBudget[role].maxOfferForRole;
@@ -301,6 +278,7 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
         player: {
           id: input.playerId,
           externalId: String(fantaAstaPlayer.id),
+          slug,
           name: fantaAstaPlayer.name,
           team: fantaAstaPlayer.team ?? null,
           roleClassic: role,
