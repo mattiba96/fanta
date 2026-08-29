@@ -26,6 +26,7 @@ export default async function Home() {
           <NavPill href="/notizie" icon="📰" label="Notizie" />
           <NavPill href="/obiettivi" icon="⭐" label="Obiettivi" />
           <NavPill href="/griglie" icon="🧮" label="Griglie" />
+          <NavPill href="/asta-live" icon="🔨" label="Asta Live" />
           <NavPill href="/impostazioni" icon="⚙️" label="Impostazioni" />
         </nav>
       </header>
