@@ -1,5 +1,5 @@
 import { buildLiveAuctionSnapshot } from "@/lib/liveAuction/recommend";
-import { FantaAstaConnectionError } from "@/lib/liveAuction/fantaAstaReader";
+import { FantaAstaConnectionError, FantaAstaUnsupportedEnvironmentError } from "@/lib/liveAuction/fantaAstaReader";
 
 export const dynamic = "force-dynamic";
 
@@ -24,11 +24,18 @@ export async function GET(req: Request) {
     return Response.json(snapshot);
   } catch (err) {
     const message = err instanceof Error ? err.message : "Errore sconosciuto durante la lettura dell'asta.";
-    // Distinguiamo i problemi di comunicazione con FantaAsta Desktop (per cui
-    // ha senso proporre di riaprire l'app) da altri errori, es. query al DB
-    // di Fantacucciolo: non sono la stessa cosa e non si risolvono allo
-    // stesso modo.
-    const source = err instanceof FantaAstaConnectionError ? "fantaasta" : "internal";
-    return Response.json({ error: message, source }, { status: source === "fantaasta" ? 503 : 500 });
+    // Distinguiamo tre casi: problema strutturale (server remoto, es. Vercel,
+    // che non potrà mai raggiungere l'app sul Mac dell'utente — riprovare o
+    // riaprire l'app non serve a nulla), problema di comunicazione con
+    // FantaAsta Desktop (per cui ha senso proporre di riaprire l'app), e
+    // altri errori (es. query al DB di Fantacucciolo) che non hanno nulla a
+    // che fare con l'app desktop.
+    const source =
+      err instanceof FantaAstaUnsupportedEnvironmentError
+        ? "unsupported-environment"
+        : err instanceof FantaAstaConnectionError
+          ? "fantaasta"
+          : "internal";
+    return Response.json({ error: message, source }, { status: source === "internal" ? 500 : 503 });
   }
 }

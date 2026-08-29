@@ -31,6 +31,27 @@ export class FantaAstaConnectionError extends Error {
   }
 }
 
+/**
+ * FantaAsta Desktop gira sul Mac dell'utente: "localhost" ha senso solo
+ * quando anche Fantacucciolo gira in locale sulla stessa macchina. Su
+ * Vercel il server è una macchina remota che non potrà MAI raggiungere
+ * quella porta — non è un problema temporaneo/riprovabile, va segnalato
+ * in modo distinto per non far credere che riaprire l'app risolva.
+ */
+export class FantaAstaUnsupportedEnvironmentError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FantaAstaUnsupportedEnvironmentError";
+  }
+}
+
+export function isLocalEnvironment(): boolean {
+  return !process.env.VERCEL;
+}
+
+const UNSUPPORTED_ENVIRONMENT_MESSAGE =
+  "L'asta live legge FantaAsta Desktop sul tuo Mac: funziona solo aprendo Fantacucciolo in locale (npm run dev) sullo stesso computer, non dal sito online, perché un server remoto non può raggiungere un'app sul tuo computer.";
+
 export type FantaAstaZone = "gk" | "def" | "mid" | "atk" | (string & {});
 
 export interface FantaAstaRosterComposition {
@@ -349,6 +370,10 @@ async function readFantaAstaStateInner(
 }
 
 export async function readFantaAstaState(opts?: { port?: number }): Promise<FantaAstaState> {
+  if (!isLocalEnvironment()) {
+    throw new FantaAstaUnsupportedEnvironmentError(UNSUPPORTED_ENVIRONMENT_MESSAGE);
+  }
+
   const envPort = Number(process.env.FANTAASTA_DEBUG_PORT);
   const port = opts?.port ?? (Number.isFinite(envPort) && envPort > 0 ? envPort : DEFAULT_PORT);
 

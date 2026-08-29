@@ -2,6 +2,7 @@
 
 import { exec as execCallback } from "node:child_process";
 import { promisify } from "node:util";
+import { isLocalEnvironment } from "@/lib/liveAuction/fantaAstaReader";
 
 const exec = promisify(execCallback);
 
@@ -11,6 +12,14 @@ export type LaunchOutcome = {
 };
 
 export async function launchFantaAstaDesktop(): Promise<LaunchOutcome> {
+  if (!isLocalEnvironment()) {
+    return {
+      ok: false,
+      message:
+        "Questo pulsante apre un'app sul Mac dell'utente: non ha effetto dal sito online, il server remoto non può lanciare programmi sul tuo computer. Usa Fantacucciolo in locale (npm run dev).",
+    };
+  }
+
   try {
     // Percorso assoluto invece di affidarsi al PATH: il processo Next.js può
     // girare in un ambiente (es. avviato da un tool esterno) il cui PATH non

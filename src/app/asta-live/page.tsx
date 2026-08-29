@@ -29,7 +29,7 @@ const BAND_LABELS: Record<string, string> = {
   scommessa: "Scommessa",
 };
 
-type ErrorSource = "fantaasta" | "internal" | "input";
+type ErrorSource = "fantaasta" | "internal" | "input" | "unsupported-environment";
 type ApiResponse = LiveAuctionSnapshot | { error: string; source?: ErrorSource };
 
 function isErrorResponse(data: unknown): data is { error: string; source?: ErrorSource } {
@@ -140,7 +140,9 @@ export default function AstaLivePage() {
           <p className="text-sm text-red-800 dark:text-red-300">
             {errorSource === "fantaasta"
               ? `FantaAsta Desktop non è raggiungibile: ${errorMessage}`
-              : `Errore durante la lettura dell'asta: ${errorMessage}`}
+              : errorSource === "unsupported-environment"
+                ? errorMessage
+                : `Errore durante la lettura dell'asta: ${errorMessage}`}
           </p>
           {errorSource === "fantaasta" && (
             <>
