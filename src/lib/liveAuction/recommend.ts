@@ -43,16 +43,36 @@ export type LiveAdvice = {
   affordable: boolean;
 };
 
+// Budget "reattivo" di reparto: quanto dovrebbe valere il ruolo (share del
+// FVM totale sui giocatori attivi, applicata al budget d'asta), quanto ho
+// speso finora sul ruolo, e quanto posso ancora offrire su quel ruolo
+// tenendo conto sia dello sforamento/risparmio sia degli slot ancora liberi.
+export type RoleBudgetInfo = {
+  share: number;
+  targetBudget: number;
+  spent: number;
+  remaining: number;
+  maxOfferForRole: number;
+};
+
 export type LiveAuctionSnapshot = {
   settings: FantaAstaSettings;
   myTeam: FantaAstaTeamSnapshot | null;
   otherTeams: FantaAstaTeamSnapshot[];
   bestPicksByRole: Record<Role, LiveAdvice[]>;
+  roleBudget: Record<Role, RoleBudgetInfo>;
 };
 
 // Non serve mostrare più di questo per ruolo: la lista è comunque ordinata
 // per punteggio, quindi i migliori restano sempre in cima.
 const MAX_PICKS_PER_ROLE = 30;
+
+// Quando il FVM totale di un ruolo risulta 0 (nessun dato disponibile), non
+// possiamo calcolarne la quota reale: usiamo una quota di ripiego uguale per
+// tutti i ruoli invece di dividere per zero.
+const ROLE_BUDGET_FALLBACK_SHARE = 0.25;
+
+const ROLE_LIST = Object.keys(ROLE_TO_ZONE) as Role[];
 
 const EMPTY_ROLE_RECORD = <T>(): Record<Role, T[]> => ({ P: [], D: [], C: [], A: [] });
 
@@ -81,6 +101,64 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
     mid: rosterComposition.mid,
     atk: rosterComposition.atk,
   };
+
+  // Quota di budget "che dovrebbe" andare a ciascun ruolo: calcolata dai dati
+  // reali della stagione (FVM sui giocatori attivi, fallback alla quotazione
+  // corrente se l'FVM manca), non da percentuali fisse — così si adatta da
+  // sola stagione per stagione.
+  const roleFvmRows = await db
+    .select({
+      roleClassic: players.roleClassic,
+      fvmClassic: players.fvmClassic,
+      quotCurrentClassic: players.quotCurrentClassic,
+    })
+    .from(players)
+    .where(eq(players.isActive, 1));
+
+  const fvmSumByRole: Record<Role, number> = { P: 0, D: 0, C: 0, A: 0 };
+  for (const r of roleFvmRows) {
+    const role = r.roleClassic as Role | null;
+    if (!role || !(role in fvmSumByRole)) continue;
+    fvmSumByRole[role] += r.fvmClassic ?? r.quotCurrentClassic ?? 0;
+  }
+  const totalFvm = ROLE_LIST.reduce((sum, role) => sum + fvmSumByRole[role], 0);
+  const roleShare: Record<Role, number> = { P: 0, D: 0, C: 0, A: 0 };
+  for (const role of ROLE_LIST) {
+    roleShare[role] =
+      fvmSumByRole[role] > 0 ? fvmSumByRole[role] / totalFvm : ROLE_BUDGET_FALLBACK_SHARE;
+  }
+
+  // Quanto la mia squadra ha già speso per ruolo finora: stesso criterio di
+  // corrispondenza usato sopra per individuare myTeam (nome normalizzato),
+  // applicato alla squadra registrata su ciascuna transazione.
+  const spentByRole: Record<Role, number> = { P: 0, D: 0, C: 0, A: 0 };
+  for (const tx of state.data.transactions ?? []) {
+    if (tx.team.name.trim().toLowerCase() !== normalizedName) continue;
+    const role = ZONE_TO_ROLE_CLASSIC[tx.player.zone];
+    if (!role) continue;
+    spentByRole[role] += tx.cost;
+  }
+
+  const roleBudget = {} as Record<Role, RoleBudgetInfo>;
+  for (const role of ROLE_LIST) {
+    const targetBudget = Math.round(roleShare[role] * state.data.settings.startingBudget);
+    const spent = spentByRole[role];
+    const remaining = targetBudget - spent;
+    // Riserva 1 credito per ciascuno degli ALTRI slot ancora da riempire in
+    // questo ruolo (non per quello che sto eventualmente per comprare ora).
+    const slotsLeftForRole = effectiveRosterHash[ROLE_TO_ZONE[role]];
+    const reserve = Math.max(0, slotsLeftForRole - 1);
+    const roleMaxOffer = Math.max(1, remaining - reserve);
+    roleBudget[role] = {
+      share: roleShare[role],
+      targetBudget,
+      spent,
+      remaining,
+      // Non può comunque superare il tetto globale già calcolato sopra
+      // (basato su TUTTI gli slot rimanenti, non solo di questo ruolo).
+      maxOfferForRole: Math.min(effectiveMaxOffer, roleMaxOffer),
+    };
+  }
 
   const availablePlayers = state.data.players.filter((p) => p.sold === false);
   const externalIds = availablePlayers.map((p) => String(p.id));
@@ -209,7 +287,8 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
 
     const list: LiveAdvice[] = group.map(({ input, fantaAstaPlayer }) => {
       const advice = adviceMap.get(input.playerId)!;
-      const affordable = advice.suggestedPrice == null || advice.suggestedPrice <= effectiveMaxOffer;
+      const affordable =
+        advice.suggestedPrice == null || advice.suggestedPrice <= roleBudget[role].maxOfferForRole;
 
       return {
         player: {
@@ -234,5 +313,6 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
     myTeam,
     otherTeams,
     bestPicksByRole,
+    roleBudget,
   };
 }

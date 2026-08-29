@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { launchFantaAstaDesktop } from "@/actions/liveAuction";
 import type { Role } from "@/lib/advice/engine";
-import type { LiveAdvice, LiveAuctionSnapshot } from "@/lib/liveAuction/recommend";
+import type { LiveAdvice, LiveAuctionSnapshot, RoleBudgetInfo } from "@/lib/liveAuction/recommend";
 import type { FantaAstaTeamSnapshot } from "@/lib/liveAuction/fantaAstaReader";
 
 const POLL_INTERVAL_MS = 4000;
@@ -183,7 +183,7 @@ export default function AstaLivePage() {
 }
 
 function TeamSummary({ snapshot }: { snapshot: LiveAuctionSnapshot }) {
-  const { myTeam, settings } = snapshot;
+  const { myTeam, settings, roleBudget } = snapshot;
   const budget = myTeam?.credits ?? myTeam?.budget ?? settings.startingBudget;
   const slots = myTeam?.rosterHash ?? {
     gk: settings.rosterComposition.gk,
@@ -205,10 +205,26 @@ function TeamSummary({ snapshot }: { snapshot: LiveAuctionSnapshot }) {
       <div className="flex flex-wrap gap-6">
         <Stat label="Crediti rimanenti" value={budget} />
         {myTeam?.maxOffer != null && <Stat label="Offerta massima" value={myTeam.maxOffer} />}
-        <Stat label="Portieri da comprare" value={slots.gk} />
-        <Stat label="Difensori da comprare" value={slots.def} />
-        <Stat label="Centrocampisti da comprare" value={slots.mid} />
-        <Stat label="Attaccanti da comprare" value={slots.atk} />
+        <Stat
+          label="Portieri da comprare"
+          value={slots.gk}
+          roleBudget={roleBudget.P}
+        />
+        <Stat
+          label="Difensori da comprare"
+          value={slots.def}
+          roleBudget={roleBudget.D}
+        />
+        <Stat
+          label="Centrocampisti da comprare"
+          value={slots.mid}
+          roleBudget={roleBudget.C}
+        />
+        <Stat
+          label="Attaccanti da comprare"
+          value={slots.atk}
+          roleBudget={roleBudget.A}
+        />
       </div>
     </section>
   );
@@ -250,11 +266,30 @@ function OtherTeamsRecap({ teams }: { teams: FantaAstaTeamSnapshot[] }) {
   );
 }
 
-function Stat({ label, value }: { label: string; value: number }) {
+function Stat({
+  label,
+  value,
+  roleBudget,
+}: {
+  label: string;
+  value: number;
+  roleBudget?: RoleBudgetInfo;
+}) {
   return (
     <div>
       <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">{value}</p>
       <p className="text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
+      {roleBudget && (
+        <p
+          className={
+            roleBudget.spent > roleBudget.targetBudget
+              ? "text-xs font-medium text-red-600 dark:text-red-400"
+              : "text-xs text-zinc-500 dark:text-zinc-400"
+          }
+        >
+          budget reparto: {roleBudget.spent}/{roleBudget.targetBudget}
+        </p>
+      )}
     </div>
   );
 }
