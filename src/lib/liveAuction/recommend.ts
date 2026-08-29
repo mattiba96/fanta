@@ -14,12 +14,14 @@ import {
   readFantaAstaState,
   deriveTeams,
   transactedPlayerIds,
+  getSelectedPlayer,
   ZONE_TO_ROLE_CLASSIC,
   type FantaAstaPlayer,
   type FantaAstaRosterHash,
   type FantaAstaSettings,
   type FantaAstaTeamSnapshot,
 } from "@/lib/liveAuction/fantaAstaReader";
+import { getPlayerSpotlight, type PlayerSpotlight } from "@/lib/liveAuction/spotlight";
 
 // keyof FantaAstaRosterHash risulterebbe "string" (l'interfaccia ha anche un
 // index signature per campi non ancora osservati): la union esplicita qui
@@ -63,6 +65,7 @@ export type LiveAuctionSnapshot = {
   otherTeams: FantaAstaTeamSnapshot[];
   bestPicksByRole: Record<Role, LiveAdvice[]>;
   roleBudget: Record<Role, RoleBudgetInfo>;
+  selectedPlayer: PlayerSpotlight | null;
 };
 
 // Non serve mostrare più di questo per ruolo: la lista è comunque ordinata
@@ -293,11 +296,17 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
     bestPicksByRole[role] = list.slice(0, MAX_PICKS_PER_ROLE);
   }
 
+  const selectedFantaAstaPlayer = getSelectedPlayer(state);
+  const selectedPlayer = selectedFantaAstaPlayer
+    ? await getPlayerSpotlight(String(selectedFantaAstaPlayer.id))
+    : null;
+
   return {
     settings: state.data.settings,
     myTeam,
     otherTeams,
     bestPicksByRole,
     roleBudget,
+    selectedPlayer,
   };
 }

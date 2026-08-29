@@ -470,3 +470,32 @@ export function deriveTeams(state: FantaAstaState): FantaAstaTeamSnapshot[] {
 export function transactedPlayerIds(state: FantaAstaState): Set<number> {
   return new Set((state.data.transactions ?? []).map((tx) => tx.player.id));
 }
+
+/**
+ * Giocatore che l'utente sta guardando ora in FantaAsta Desktop (es. dopo
+ * averlo cercato per nome), ricavato da state.data.selector (zoneFilter,
+ * sortType, soldFilter, cursor: posizione nell'elenco filtrato/ordinato
+ * così come lo vede l'utente). Verificato dal vivo: affidabile quando
+ * sortType è "name" (ordine alfabetico, nessuna ambiguità); quando è
+ * "price" più giocatori condividono lo stesso prezzo e l'ordinamento
+ * esatto di FantaAsta per spezzare i pareggi non è replicabile con
+ * certezza, quindi il cursore può risultare impreciso di qualche
+ * posizione in quel caso.
+ */
+export function getSelectedPlayer(state: FantaAstaState): FantaAstaPlayer | null {
+  const sel = state.data.selector;
+  if (!sel || sel.cursor == null) return null;
+
+  let candidates = state.data.players;
+  if (sel.zoneFilter) candidates = candidates.filter((p) => p.zone === sel.zoneFilter);
+  if (sel.soldFilter === true) candidates = candidates.filter((p) => p.sold === false);
+
+  const sorted = candidates.slice();
+  if (sel.sortType === "name") {
+    sorted.sort((a, b) => a.name.localeCompare(b.name));
+  } else if (sel.sortType === "price") {
+    sorted.sort((a, b) => (b.price ?? 0) - (a.price ?? 0));
+  }
+
+  return sorted[sel.cursor] ?? null;
+}

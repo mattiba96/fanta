@@ -6,6 +6,8 @@ import { launchFantaAstaDesktop } from "@/actions/liveAuction";
 import type { Role } from "@/lib/advice/engine";
 import type { LiveAdvice, LiveAuctionSnapshot, RoleBudgetInfo } from "@/lib/liveAuction/recommend";
 import type { FantaAstaTeamSnapshot } from "@/lib/liveAuction/fantaAstaReader";
+import type { PlayerSpotlight } from "@/lib/liveAuction/spotlight";
+import { bandLabel } from "@/lib/advice/engine";
 
 const POLL_INTERVAL_MS = 4000;
 const STORAGE_KEY = "fantacucciolo:myTeamName";
@@ -171,6 +173,7 @@ export default function AstaLivePage() {
         <>
           <TeamSummary snapshot={snapshot} />
           <OtherTeamsRecap teams={snapshot.otherTeams} />
+          <SelectedPlayerSpotlight player={snapshot.selectedPlayer} />
           <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
             {ROLE_ORDER.map((role) => (
               <RoleSection key={role} role={role} picks={snapshot.bestPicksByRole[role]} />
@@ -262,6 +265,78 @@ function OtherTeamsRecap({ teams }: { teams: FantaAstaTeamSnapshot[] }) {
           </tbody>
         </table>
       </div>
+    </section>
+  );
+}
+
+function SelectedPlayerSpotlight({ player }: { player: PlayerSpotlight | null }) {
+  if (!player) return null;
+
+  const worstStatus = player.lineupStatuses[0]; // già ordinato per giornata decrescente
+  const priceHistoryLabel = player.priceHistory.map((p) => `${p.seasonLabel}: ${p.price}cr`).join(" · ");
+
+  return (
+    <section className="mt-6 rounded-md border-2 border-brand bg-white p-4 dark:bg-zinc-900">
+      <h2 className="mb-1 flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+        🔎 In visione ora
+      </h2>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <p className="flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            <Link href={`/giocatori/${player.slug}`} target="_blank" className="hover:underline">
+              {player.name}
+            </Link>
+            <span className="text-sm font-normal text-zinc-500 dark:text-zinc-400">{player.teamName}</span>
+          </p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Quotazione {player.quotCurrentClassic ?? "—"} · FVM {player.fvmClassic ?? "—"}
+            {player.stats && ` · MV ${player.stats.mv ?? "—"} · FM ${player.stats.fm ?? "—"} · ${player.stats.goals ?? 0} gol, ${player.stats.assists ?? 0} assist`}
+          </p>
+          {priceHistoryLabel && (
+            <p className="text-xs text-zinc-400">Prezzi passati: {priceHistoryLabel}</p>
+          )}
+        </div>
+        {player.advice && (
+          <div className="text-right">
+            <p className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+              {player.advice.suggestedPrice ?? "—"}
+            </p>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              consigliato · {bandLabel(player.advice.band)} · punteggio {player.advice.score}
+            </p>
+          </div>
+        )}
+      </div>
+      {worstStatus && (
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">
+          Formazione: {worstStatus.status}
+          {worstStatus.probability != null && ` (${worstStatus.probability}%)`}
+          {worstStatus.note && ` — ${worstStatus.note}`} · vs {worstStatus.isHome ? "" : "@"}
+          {worstStatus.opponentName}
+        </p>
+      )}
+      {player.setPieces.length > 0 && (
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
+          {player.setPieces.map((sp) => `${sp.kind} #${sp.priority}`).join(" · ")}
+        </p>
+      )}
+      {(player.proDescription || player.contraDescription) && (
+        <div className="mt-2 space-y-1 text-sm">
+          {player.proDescription && (
+            <p className="text-emerald-700 dark:text-emerald-400">PRO: {player.proDescription}</p>
+          )}
+          {player.contraDescription && (
+            <p className="text-red-700 dark:text-red-400">CONTRO: {player.contraDescription}</p>
+          )}
+        </div>
+      )}
+      {player.news.length > 0 && (
+        <ul className="mt-2 space-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+          {player.news.slice(0, 3).map((n) => (
+            <li key={n.id}>· {n.title}</li>
+          ))}
+        </ul>
+      )}
     </section>
   );
 }
