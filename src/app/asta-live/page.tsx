@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { launchFantaAstaDesktop } from "@/actions/liveAuction";
 import type { Role } from "@/lib/advice/engine";
-import type { LiveAdvice, LiveAuctionSnapshot, RoleBudgetInfo } from "@/lib/liveAuction/recommend";
+import type { LiveAdvice, LiveAuctionSnapshot, RoleBudgetInfo, Verdict } from "@/lib/liveAuction/recommend";
 import type { FantaAstaTeamSnapshot } from "@/lib/liveAuction/fantaAstaReader";
 import type { PlayerSpotlight } from "@/lib/liveAuction/spotlight";
 import { bandLabel } from "@/lib/advice/engine";
@@ -173,7 +173,7 @@ export default function AstaLivePage() {
         <>
           <TeamSummary snapshot={snapshot} />
           <OtherTeamsRecap teams={snapshot.otherTeams} />
-          <SelectedPlayerSpotlight player={snapshot.selectedPlayer} />
+          <SelectedPlayerSpotlight player={snapshot.selectedPlayer} verdict={snapshot.verdict} />
           <div className="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
             {ROLE_ORDER.map((role) => (
               <RoleSection key={role} role={role} picks={snapshot.bestPicksByRole[role]} />
@@ -269,7 +269,19 @@ function OtherTeamsRecap({ teams }: { teams: FantaAstaTeamSnapshot[] }) {
   );
 }
 
-function SelectedPlayerSpotlight({ player }: { player: PlayerSpotlight | null }) {
+const VERDICT_STYLES: Record<Verdict["action"], string> = {
+  punta: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+  aspetta: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  attenzione: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+};
+
+function SelectedPlayerSpotlight({
+  player,
+  verdict,
+}: {
+  player: PlayerSpotlight | null;
+  verdict: Verdict | null;
+}) {
   if (!player) return null;
 
   const worstStatus = player.lineupStatuses[0]; // già ordinato per giornata decrescente
@@ -280,6 +292,14 @@ function SelectedPlayerSpotlight({ player }: { player: PlayerSpotlight | null })
       <h2 className="mb-1 flex items-center gap-2 text-xs font-medium text-zinc-500 dark:text-zinc-400">
         🔎 In visione ora
       </h2>
+      {verdict && (
+        <div className={`mb-3 rounded-md px-3 py-2 text-sm ${VERDICT_STYLES[verdict.action]}`}>
+          <p className="font-semibold">
+            {verdict.action === "punta" ? "✅" : verdict.action === "aspetta" ? "⏸️" : "⚠️"} {verdict.headline}
+          </p>
+          <p>{verdict.detail}</p>
+        </div>
+      )}
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="flex items-center gap-2 text-lg font-semibold text-zinc-900 dark:text-zinc-50">

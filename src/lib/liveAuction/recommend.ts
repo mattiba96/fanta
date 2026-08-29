@@ -1,8 +1,9 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/db/client";
-import { players, playerSeasonStats, setPieceRoles, lineupPlayers } from "@/db/schema";
+import { players, playerSeasonStats, setPieceRoles, lineupPlayers, historicalAuctionPrices } from "@/db/schema";
 import {
   buildAdviceForRoleGroup,
+  bandLabel,
   type AdviceInput,
   type Advice,
   type Role,
@@ -22,6 +23,11 @@ import {
   type FantaAstaTeamSnapshot,
 } from "@/lib/liveAuction/fantaAstaReader";
 import { getPlayerSpotlight, type PlayerSpotlight } from "@/lib/liveAuction/spotlight";
+
+// Ordine delle fasce di mercato (band), dalla più alta alla più bassa —
+// serve a evitare di confrontare per solo "punteggio" (indice di VALORE,
+// non di qualità assoluta) giocatori di fasce di prezzo troppo diverse.
+const BAND_RANK: Record<Advice["band"], number> = { top: 3, "semi-top": 2, centrale: 1, scommessa: 0 };
 
 // keyof FantaAstaRosterHash risulterebbe "string" (l'interfaccia ha anche un
 // index signature per campi non ancora osservati): la union esplicita qui
@@ -59,6 +65,13 @@ export type RoleBudgetInfo = {
   maxOfferForRole: number;
 };
 
+export type Verdict = {
+  action: "punta" | "aspetta" | "attenzione";
+  headline: string;
+  detail: string;
+  ceiling: number | null;
+};
+
 export type LiveAuctionSnapshot = {
   settings: FantaAstaSettings;
   myTeam: FantaAstaTeamSnapshot | null;
@@ -66,6 +79,7 @@ export type LiveAuctionSnapshot = {
   bestPicksByRole: Record<Role, LiveAdvice[]>;
   roleBudget: Record<Role, RoleBudgetInfo>;
   selectedPlayer: PlayerSpotlight | null;
+  verdict: Verdict | null;
 };
 
 // Non serve mostrare più di questo per ruolo: la lista è comunque ordinata
@@ -107,6 +121,20 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
   // super-top, attacco 2 semitop + 1 discreto) — non una quota di mercato
   // neutra: P e C sopra la quota che avrebbero per solo valore FVM, D sotto.
   const roleShare: Record<Role, number> = { P: 0.08, D: 0.12, C: 0.45, A: 0.35 };
+
+  // Tetto storico per ruolo: il massimo REALMENTE pagato in 5 stagioni di
+  // aste (tabella historical_auction_prices) per QUALSIASI giocatore di quel
+  // ruolo — un limite di realtà indipendente dal singolo giocatore, per i
+  // casi (come Malen) in cui non esiste storico player-specific ma la
+  // formula FVM suggerisce comunque un prezzo mai visto nella pratica.
+  const roleMaxRows = await db
+    .select({ role: historicalAuctionPrices.role, maxPrice: sql<number>`max(${historicalAuctionPrices.price})` })
+    .from(historicalAuctionPrices)
+    .groupBy(historicalAuctionPrices.role);
+  const roleHistoricalMax: Partial<Record<Role, number>> = {};
+  for (const r of roleMaxRows) {
+    if (r.role && r.role in ROLE_TO_ZONE) roleHistoricalMax[r.role as Role] = r.maxPrice;
+  }
 
   // Quanto la mia squadra ha già speso per ruolo finora: stesso criterio di
   // corrispondenza usato sopra per individuare myTeam (nome normalizzato),
@@ -301,6 +329,20 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
     ? await getPlayerSpotlight(String(selectedFantaAstaPlayer.id))
     : null;
 
+  const selectedRole =
+    selectedPlayer?.roleClassic && ROLE_LIST.includes(selectedPlayer.roleClassic as Role)
+      ? (selectedPlayer.roleClassic as Role)
+      : null;
+  const verdict =
+    selectedPlayer && selectedRole
+      ? buildVerdict(
+          selectedPlayer,
+          bestPicksByRole[selectedRole].filter((p) => p.player.slug !== selectedPlayer.slug),
+          roleBudget[selectedRole],
+          roleHistoricalMax[selectedRole] ?? null,
+        )
+      : null;
+
   return {
     settings: state.data.settings,
     myTeam,
@@ -308,5 +350,114 @@ export async function buildLiveAuctionSnapshot(myTeamName: string): Promise<Live
     bestPicksByRole,
     roleBudget,
     selectedPlayer,
+    verdict,
+  };
+}
+
+/**
+ * "Punta / aspetta / attenzione" per il giocatore in visione ora, confrontato
+ * con le altre alternative ancora libere nello STESSO ruolo e col budget
+ * rimasto per quel ruolo — non solo il suo valore in isolamento.
+ */
+function buildVerdict(
+  selected: PlayerSpotlight,
+  alternatives: LiveAdvice[],
+  budget: RoleBudgetInfo,
+  roleHistoricalMax: number | null,
+): Verdict | null {
+  if (!selected.advice) return null;
+  const { score, suggestedPrice: fvmPrice } = selected.advice;
+
+  // Prezzo storico reale (aste passate di questo utente, tabella
+  // historical_auction_prices), quando disponibile: più affidabile della
+  // sola formula FVM per giocatori con un divario enorme tra FVM e
+  // quotazione (es. una stagione da fenomeno con poche presenze, come
+  // osservato dal vivo su Malen: FVM implicava ~225, mai realmente pagato).
+  const historicalPrices = selected.priceHistory.map((p) => p.price).filter((p) => Number.isFinite(p));
+  const historicalAvg =
+    historicalPrices.length > 0
+      ? Math.round(historicalPrices.reduce((a, b) => a + b, 0) / historicalPrices.length)
+      : null;
+
+  // Ci fidiamo dello storico solo quando diverge MOLTO dalla formula (la
+  // formula ha chiaramente premiato una stagione outlier): altrimenti, con
+  // uno storico vicino alla formula o assente, resta la formula FVM.
+  const priceDivergesALot = historicalAvg != null && fvmPrice != null && fvmPrice > historicalAvg * 1.8;
+  let referencePrice = priceDivergesALot ? historicalAvg : (fvmPrice ?? historicalAvg);
+
+  // Tetto di realtà indipendente dal singolo giocatore: anche senza storico
+  // player-specific, il prezzo di riferimento non dovrebbe mai sforare di
+  // molto il massimo REALMENTE pagato per QUALSIASI giocatore di questo
+  // ruolo in 5 stagioni di aste (es. Malen: nessuno storico personale, ma
+  // 248 contro un massimo mai visto di 175 per un attaccante era comunque
+  // irrealistico) — margine del 15% per ammettere una normale crescita del
+  // mercato di anno in anno.
+  const cappedByRoleHistory =
+    roleHistoricalMax != null && referencePrice != null && referencePrice > roleHistoricalMax * 1.15;
+  if (cappedByRoleHistory) referencePrice = Math.round(roleHistoricalMax! * 1.15);
+
+  const historicalNote = cappedByRoleHistory
+    ? ` (il massimo mai pagato per un giocatore di questo ruolo in 5 stagioni è ${roleHistoricalMax}: la formula da sola suggeriva molto di più)`
+    : historicalAvg != null
+      ? ` (storicamente pagato in media ${historicalAvg} nelle aste passate${
+          priceDivergesALot ? ", molto meno di quanto suggerirebbe la sola formula" : ""
+        })`
+      : "";
+
+  const ceiling =
+    referencePrice != null
+      ? Math.min(budget.maxOfferForRole, Math.round(referencePrice * 1.25))
+      : budget.maxOfferForRole;
+
+  if (referencePrice != null && referencePrice > budget.maxOfferForRole) {
+    return {
+      action: "attenzione",
+      headline: "Attenzione al budget di reparto",
+      detail: `Il prezzo di riferimento (${referencePrice}${historicalNote}) supera quello che ti resta per questo ruolo (${budget.maxOfferForRole}).`,
+      ceiling: budget.maxOfferForRole,
+    };
+  }
+
+  // "punteggio" è un indice di VALORE (fantamedia rispetto al prezzo), non di
+  // qualità assoluta: un giocatore economico con buone statistiche può avere
+  // lo stesso punteggio di uno molto più costoso e forte, perché il prezzo
+  // basso gonfia il rapporto. Confrontare per solo punteggio metterebbe sullo
+  // stesso piano fasce di mercato completamente diverse (visto dal vivo:
+  // Bremer, quotazione alta, vs De Winter, quotazione bassa) — le alternative
+  // vanno quindi confrontate solo dentro la stessa fascia (o quella subito
+  // sopra), mai ignorando del tutto la fascia.
+  const sameTierOrAbove = alternatives.filter((a) => BAND_RANK[a.advice.band] >= BAND_RANK[selected.advice!.band] - 1);
+
+  const similarCheaper = sameTierOrAbove.find(
+    (a) =>
+      a.advice.score >= score - 8 &&
+      referencePrice != null &&
+      a.advice.suggestedPrice != null &&
+      a.advice.suggestedPrice < referencePrice - 3,
+  );
+  if (similarCheaper) {
+    return {
+      action: "aspetta",
+      headline: "Puoi aspettare",
+      detail: `${similarCheaper.player.name} (${bandLabel(similarCheaper.advice.band)}) vale quasi altrettanto (punteggio ${similarCheaper.advice.score}) probabilmente a un prezzo più basso (~${similarCheaper.advice.suggestedPrice}).`,
+      ceiling,
+    };
+  }
+
+  const better = sameTierOrAbove.find((a) => a.advice.score > score + 5);
+  if (better) {
+    return {
+      action: "aspetta",
+      headline: "C'è di meglio ancora libero",
+      detail: `${better.player.name} ha un punteggio più alto (${better.advice.score}) tra i liberi in questo ruolo.`,
+      ceiling,
+    };
+  }
+
+  return {
+    action: "punta",
+    headline: "Tra i migliori ancora liberi nel ruolo",
+    detail: `Nessuna alternativa chiaramente migliore ancora libera. Puoi puntare fino a circa ${ceiling} crediti${historicalNote}.`,
+    ceiling,
   };
 }
