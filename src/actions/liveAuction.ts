@@ -12,7 +12,11 @@ export type LaunchOutcome = {
 
 export async function launchFantaAstaDesktop(): Promise<LaunchOutcome> {
   try {
-    await exec('open -a "FantaAsta Desktop" --args --remote-debugging-port=9222');
+    // Percorso assoluto invece di affidarsi al PATH: il processo Next.js può
+    // girare in un ambiente (es. avviato da un tool esterno) il cui PATH non
+    // include /usr/bin, dove "open" altrimenti risulterebbe "not found" pur
+    // essendo sempre presente su macOS a questo percorso fisso.
+    await exec('/usr/bin/open -a "FantaAsta Desktop" --args --remote-debugging-port=9222');
     return {
       ok: true,
       message: "FantaAsta Desktop avviata con il debug remoto attivo.",
